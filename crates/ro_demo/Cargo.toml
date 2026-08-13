@@ -1,0 +1,17 @@
+[package]
+name = "ro_demo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ro-Physics Team"]
+description = "Demo application for Ro-Physics Engine"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+ro_physics = { path = "../ro_physics", features = ["serialization"] }
+winit = { workspace = true }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+nalgebra = { workspace = true }
+rand = { workspace = true }
