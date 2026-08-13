@@ -61,6 +61,7 @@ world.step(1.0 / 60.0);
 Run the interactive demo:
 
 ```bash
+git clone https://github.com/YOUR_USERNAME/ro-physics
 cd crates/ro_demo
 cargo run
 ```
