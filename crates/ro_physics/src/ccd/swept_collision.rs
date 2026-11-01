@@ -178,10 +178,7 @@ impl SweptCollisionDetector {
             return false;
         }
 
-        if dt <= 0.0
-            || !dt.is_finite()
-            || (!body_a.is_dynamic() && !body_b.is_dynamic())
-        {
+        if dt <= 0.0 || !dt.is_finite() || (!body_a.is_dynamic() && !body_b.is_dynamic()) {
             return false;
         }
 
