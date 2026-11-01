@@ -400,8 +400,7 @@ impl fmt::Display for Bvh {
 /// Calculate intersection between a ray and an AABB
 ///
 /// Returns Some((t_min, t_max)) if there's an intersection, None otherwise
-#[inline]
-#[must_use]
+///
 /// Read one component of a vector (0 -> x, anything else -> y)
 /// `Vec2` does not implement `Index`, so spatial code has to go through this
 /// helper instead of indexing with a dynamic axis.
@@ -576,7 +575,7 @@ mod tests {
         let direction = Vec2::new(1.0, 0.0);
         let result = ray_aabb_intersection(origin, direction, aabb);
         assert!(result.is_some());
-        let (t_min, t_max) = result.unwrap();
+        let (t_min, _) = result.unwrap();
         assert!(t_min <= 0.0);
     }
 

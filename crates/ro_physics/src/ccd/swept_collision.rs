@@ -66,7 +66,6 @@ impl SweptCollisionDetector {
         let toi = self.calculate_toi(
             &shape_a, transform_a, velocity_a, angular_velocity_a,
             &shape_b, transform_b, velocity_b, angular_velocity_b,
-            dt,
         );
 
         if toi.is_colliding() && toi.toi < 1.0 {
@@ -88,10 +87,7 @@ impl SweptCollisionDetector {
         transform_b: Transform,
         velocity_b: Vec2,
         angular_velocity_b: f32,
-        dt: f32,
     ) -> ToiResult {
-        let toi = TimeOfImpact;
-
         match (shape_a, shape_b) {
             (Shape::Circle(circle_a), Shape::Circle(circle_b)) => {
                 TimeOfImpact::circle_circle(

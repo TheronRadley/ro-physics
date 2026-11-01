@@ -4,7 +4,7 @@
 //! constraints in the physics world.
 
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// A handle to a constraint in the physics world.
 ///

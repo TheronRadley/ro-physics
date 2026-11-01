@@ -125,7 +125,7 @@ pub use utils::*;
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
-    use crate::math::utils::{approx_eq, approx_eq_eps};
+    use crate::math::utils::approx_eq_eps;
 
     #[test]
     fn test_semi_implicit_euler() {

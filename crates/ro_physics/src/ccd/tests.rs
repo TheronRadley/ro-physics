@@ -4,11 +4,9 @@ use super::*;
 use crate::bodies::{Body, BodyHandle};
 use crate::ccd::CcdResult;
 use crate::collision::{Collider, ColliderHandle};
-use crate::math::{Transform, Vec2};
+use crate::math::Vec2;
 use crate::shapes::{Circle, Polygon, Shape};
 
-#[cfg(test)]
-use super::*;
 use crate::constants::EPSILON;
 
 // ========== TOI Edge Cases ==========

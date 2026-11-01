@@ -7,7 +7,7 @@ use std::fmt;
 
 use crate::bodies::Body;
 use crate::constants::{EPSILON, PI};
-use crate::math::{Rot2, Vec2};
+use crate::math::Vec2;
 use crate::bodies::BodyHandle;
 use super::{BaseConstraint, Constraint, ConstraintHandle};
 
@@ -119,11 +119,15 @@ impl RevoluteJoint {
             motor_speed: 0.0,
             motor_enabled: false,
             position_impulse: Vec2::zero(),
+            angle_impulse: 0.0,
             motor_impulse: 0.0,
-            translation_effective_mass: 0.0,
+            mass_11: 0.0,
+            mass_12: 0.0,
+            mass_22: 0.0,
             rotation_effective_mass: 0.0,
             position_bias: Vec2::zero(),
             angle_bias: 0.0,
+            current_dt: 0.0,
         }
     }
 
@@ -270,13 +274,17 @@ impl RevoluteJoint {
         angle_b - angle_a
     }
 
-    /// Get the world anchor point (should be the same for both bodies)
+    /// Get the world anchor point
+    ///
+    /// Both anchors should coincide when the constraint is satisfied, so the
+    /// midpoint is returned to stay symmetric when they have drifted apart.
     #[inline]
     #[must_use]
     pub fn world_anchor(&self, body_a: &Body, body_b: &Body) -> Vec2 {
-        // The world anchor should be the same for both bodies if the constraint is satisfied
-        // For now, return the anchor from body A
-        body_a.transform().transform_point(self.local_anchor_a)
+        let anchor_a = body_a.transform().transform_point(self.local_anchor_a);
+        let anchor_b = body_b.transform().transform_point(self.local_anchor_b);
+
+        (anchor_a + anchor_b) * 0.5
     }
 
     /// Check if the joint is at its lower limit
@@ -636,6 +644,7 @@ impl fmt::Display for RevoluteJoint {
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
+    use crate::math::Rot2;
     use crate::math::utils::approx_eq;
 
     #[test]
@@ -763,8 +772,9 @@ mod tests {
 
         let joint = RevoluteJoint::new(handle, body_a, body_b, Vec2::new(1.0, 2.0));
 
+        // Anchors: (10, 20) + (1, 2) and (30, 40) + (1, 2)
         let anchor = joint.world_anchor(&body_a_obj, &body_b_obj);
-        assert_eq!(anchor, Vec2::new(11.0, 22.0));
+        assert_eq!(anchor, Vec2::new(21.0, 32.0));
     }
 
     #[test]

@@ -107,7 +107,7 @@ impl fmt::Display for Ray {
 mod tests {
     use super::*;
     use crate::constants::EPSILON;
-    use crate::math::utils::{approx_eq, approx_eq_eps};
+    use crate::math::utils::approx_eq;
 
     #[test]
     fn test_construction() {

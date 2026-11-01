@@ -65,7 +65,6 @@ impl std::error::Error for ShapeError {}
 
 /// Shape utilities
 pub mod utils {
-    use super::*;
     use crate::constants::EPSILON;
     use crate::math::Vec2;
 

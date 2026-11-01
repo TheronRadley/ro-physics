@@ -3,7 +3,7 @@
 //! This module provides a handle type for referencing bodies.
 
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// A handle to a body in the physics world.
 ///

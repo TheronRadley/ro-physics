@@ -85,6 +85,11 @@ impl TimeOfImpact {
         max_iterations: usize,
         tolerance: f32,
     ) -> ToiResult {
+        // The circle-circle case has a closed form solution, so it needs no
+        // iterative search; the parameters are kept so every shape pair shares
+        // one signature.
+        let _ = (max_iterations, tolerance);
+
         // Relative motion
         let relative_position = position_b - position_a;
         let relative_velocity = velocity_b - velocity_a;

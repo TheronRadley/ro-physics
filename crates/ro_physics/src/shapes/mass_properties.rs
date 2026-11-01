@@ -200,8 +200,7 @@ mod tests {
 
     #[test]
     fn test_approx_eq() {
-        use crate::math::utils::approx_eq;
-        
+            
         let mp1 = MassProperties::dynamic(10.0, 5.0);
         let mp2 = MassProperties::new(10.0, 5.0 + EPSILON, Vec2::zero());
         

@@ -183,11 +183,13 @@ pub mod utils {
     }
 }
 
-pub use utils::*;
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::utils::{
+        calculate_contact_impulse, calculate_effective_mass, calculate_normal_velocity,
+        calculate_relative_velocity,
+    };
     use crate::bodies::BodyHandle;
     use crate::math::utils::approx_eq;
 

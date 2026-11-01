@@ -1,9 +1,7 @@
 //! Integration tests for the world module.
 
 use super::*;
-use crate::bodies::BodyHandle;
 use crate::math::{Rot2, Transform, Vec2};
-use crate::math::utils::approx_eq;
 
 #[test]
 fn test_world_creation() {

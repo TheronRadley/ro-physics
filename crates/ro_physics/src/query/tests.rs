@@ -5,11 +5,8 @@ use crate::bodies::BodyHandle;
 use crate::collision::ColliderHandle;
 use crate::geometry::Aabb;
 use crate::math::{Rot2, Transform, Vec2};
-use crate::shapes::{Circle, Polygon, Shape};
 use crate::world::World;
 
-#[cfg(test)]
-use super::*;
 
 // ========== BVH Tests ==========
 
@@ -587,12 +584,6 @@ fn test_ray_cast_options_builder() {
 }
 
 // Moved here from `query/mod.rs`, which cannot declare two `tests` modules.
-#[cfg(test)]
-use super::*;
-
-use super::*;
-use crate::bodies::BodyHandle;
-use crate::collision::ColliderHandle;
 
 #[test]
 fn test_point_query_result() {

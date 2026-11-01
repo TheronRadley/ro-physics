@@ -71,7 +71,6 @@ impl Default for SleepingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::EPSILON;
 
     #[test]
     fn test_construction() {
