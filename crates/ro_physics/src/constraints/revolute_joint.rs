@@ -8,7 +8,7 @@ use std::fmt;
 use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
 use crate::bodies::BodyHandle;
-use crate::constants::{EPSILON, PI};
+use crate::constants::{EPSILON, MAX_CORRECTION_SPEED, PI};
 use crate::math::Vec2;
 
 /// A revolute joint constraint.
@@ -505,7 +505,10 @@ impl RevoluteJoint {
             return Vec2::zero();
         }
 
-        error * (BAUMGARTE_FACTOR / dt)
+        (error * (BAUMGARTE_FACTOR / dt)).clamp(
+            Vec2::new(-MAX_CORRECTION_SPEED, -MAX_CORRECTION_SPEED),
+            Vec2::new(MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED),
+        )
     }
 
     /// Calculate angle bias for Baumgarte stabilization
@@ -518,7 +521,7 @@ impl RevoluteJoint {
             return 0.0;
         }
 
-        error * (BAUMGARTE_FACTOR / dt)
+        (error * (BAUMGARTE_FACTOR / dt)).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED)
     }
 
     /// Clamp angle to be within limits

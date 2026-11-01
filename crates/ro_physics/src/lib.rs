@@ -190,6 +190,14 @@ pub mod constants {
     pub const MAX_TIMESTEP: f32 = 1.0 / 15.0;
     /// Smallest timestep the simulation accepts (seconds)
     pub const MIN_TIMESTEP: f32 = 1e-5;
+    /// Fastest velocity a position-correction term may produce (m/s or rad/s)
+    ///
+    /// Baumgarte stabilisation turns a position error into a velocity by
+    /// dividing by the timestep, so the shorter the step, the faster the
+    /// correction. Uncapped, a short step — a continuous-collision sub-step, or
+    /// a caller that simply uses a small `dt` — turns millimetres of overlap
+    /// into thousands of metres per second and launches the body.
+    pub const MAX_CORRECTION_SPEED: f32 = 10.0;
     /// Contact slop: overlaps smaller than this are not corrected
     pub const LINEAR_SLOP: f32 = 0.005;
 }

@@ -8,7 +8,7 @@ use std::fmt;
 use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
 use crate::bodies::BodyHandle;
-use crate::constants::EPSILON;
+use crate::constants::{EPSILON, MAX_CORRECTION_SPEED};
 use crate::math::Vec2;
 
 /// A motor joint constraint.
@@ -536,7 +536,8 @@ impl MotorJoint {
         // Baumgarte factor
         const BAUMGARTE_FACTOR: f32 = 0.2;
 
-        let velocity = -BAUMGARTE_FACTOR * error / dt;
+        let velocity = (-BAUMGARTE_FACTOR * error / dt)
+            .clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
 
         if max_force > EPSILON && effective_mass > EPSILON {
             let max_velocity = max_force * dt / effective_mass;

@@ -8,7 +8,7 @@ use std::fmt;
 use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
 use crate::bodies::BodyHandle;
-use crate::constants::EPSILON;
+use crate::constants::{EPSILON, MAX_CORRECTION_SPEED};
 use crate::math::Vec2;
 
 /// A distance joint constraint.
@@ -395,7 +395,7 @@ impl DistanceJoint {
             return 0.0;
         }
 
-        BAUMGARTE_FACTOR * error / dt
+        (BAUMGARTE_FACTOR * error / dt).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED)
     }
 
     /// Calculate the separation velocity along an axis

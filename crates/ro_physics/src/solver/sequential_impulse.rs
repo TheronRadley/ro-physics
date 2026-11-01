@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use super::SolverConfig;
 use crate::bodies::{Body, BodyHandle};
 use crate::collision::ContactManifold;
-use crate::constants::{EPSILON, LINEAR_SLOP};
+use crate::constants::{EPSILON, LINEAR_SLOP, MAX_CORRECTION_SPEED};
 use crate::math::Vec2;
 
 /// A single contact point prepared for solving.
@@ -215,6 +215,12 @@ impl SequentialImpulseSolver {
                 let push = (separation + LINEAR_SLOP).min(0.0);
                 (-self.config.baumgarte_factor * inv_dt * push)
                     .min(self.config.max_position_correction * inv_dt)
+                    // `distance / dt` is unbounded as the step shrinks, and
+                    // continuous collision detection does shrink the step:
+                    // without this cap a 0.1 m correction over a 1e-5 s
+                    // sub-step would be 10 km/s, which tunnels through
+                    // anything. See `MAX_CORRECTION_SPEED`.
+                    .min(MAX_CORRECTION_SPEED)
             };
 
             // Restitution only kicks in above the configured threshold and is
