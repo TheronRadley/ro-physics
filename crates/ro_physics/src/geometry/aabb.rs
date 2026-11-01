@@ -18,7 +18,10 @@ use crate::math::{utils::approx_eq, Vec2};
 ///
 /// The AABB is defined by its minimum and maximum corners.
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Aabb {
     /// Minimum corner (bottom-left in standard coordinates)
     pub min: Vec2,
@@ -322,12 +325,7 @@ impl Aabb {
     /// or None if there's no intersection.
     #[inline]
     #[must_use]
-    pub fn ray_cast(
-        self,
-        origin: Vec2,
-        direction: Vec2,
-        max_fraction: f32,
-    ) -> Option<f32> {
+    pub fn ray_cast(self, origin: Vec2, direction: Vec2, max_fraction: f32) -> Option<f32> {
         let mut t_min = 0.0_f32;
         let mut t_max = max_fraction;
 
@@ -419,11 +417,7 @@ impl Default for Aabb {
 
 impl fmt::Display for Aabb {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Aabb(min: {}, max: {})",
-            self.min, self.max
-        )
+        write!(f, "Aabb(min: {}, max: {})", self.min, self.max)
     }
 }
 
@@ -467,7 +461,7 @@ mod tests {
     #[test]
     fn test_properties() {
         let aabb = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 20.0));
-        
+
         assert_eq!(aabb.center(), Vec2::new(5.0, 10.0));
         assert_eq!(aabb.size(), Vec2::new(10.0, 20.0));
         assert_eq!(aabb.width(), 10.0);
@@ -507,7 +501,7 @@ mod tests {
     #[test]
     fn test_contains() {
         let aabb = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
-        
+
         assert!(aabb.contains_point(Vec2::new(5.0, 5.0)));
         assert!(aabb.contains_point(Vec2::new(0.0, 0.0)));
         assert!(aabb.contains_point(Vec2::new(10.0, 10.0)));
@@ -517,7 +511,7 @@ mod tests {
 
         let smaller = Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(8.0, 8.0));
         assert!(aabb.contains_aabb(smaller));
-        
+
         let larger = Aabb::new(Vec2::new(-5.0, -5.0), Vec2::new(15.0, 15.0));
         assert!(!aabb.contains_aabb(larger));
     }
@@ -528,7 +522,7 @@ mod tests {
         let aabb2 = Aabb::new(Vec2::new(5.0, 5.0), Vec2::new(15.0, 15.0));
         let aabb3 = Aabb::new(Vec2::new(-10.0, -10.0), Vec2::new(-5.0, -5.0));
         let aabb4 = Aabb::new(Vec2::new(15.0, 15.0), Vec2::new(20.0, 20.0));
-        
+
         assert!(aabb1.overlaps(aabb2));
         assert!(!aabb1.overlaps(aabb3));
         assert!(!aabb1.overlaps(aabb4));
@@ -539,7 +533,7 @@ mod tests {
     fn test_intersection() {
         let aabb1 = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let aabb2 = Aabb::new(Vec2::new(5.0, 5.0), Vec2::new(15.0, 15.0));
-        
+
         let intersection = aabb1.intersection(aabb2);
         assert!(intersection.is_some());
         let int = intersection.unwrap();
@@ -555,7 +549,7 @@ mod tests {
     fn test_union() {
         let aabb1 = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let aabb2 = Aabb::new(Vec2::new(5.0, 5.0), Vec2::new(15.0, 15.0));
-        
+
         let union = aabb1.union(aabb2);
         assert_eq!(union.min, Vec2::new(0.0, 0.0));
         assert_eq!(union.max, Vec2::new(15.0, 15.0));
@@ -564,7 +558,7 @@ mod tests {
     #[test]
     fn test_expand() {
         let mut aabb = Aabb::from_point(Vec2::new(5.0, 5.0));
-        
+
         aabb.expand_by_point(Vec2::new(10.0, 10.0));
         assert_eq!(aabb.min, Vec2::new(5.0, 5.0));
         assert_eq!(aabb.max, Vec2::new(10.0, 10.0));
@@ -611,36 +605,55 @@ mod tests {
     #[test]
     fn test_closest_point() {
         let aabb = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
-        
+
         // Point inside
         assert_eq!(aabb.closest_point(Vec2::new(5.0, 5.0)), Vec2::new(5.0, 5.0));
-        
+
         // Point outside (right)
-        assert_eq!(aabb.closest_point(Vec2::new(15.0, 5.0)), Vec2::new(10.0, 5.0));
-        
+        assert_eq!(
+            aabb.closest_point(Vec2::new(15.0, 5.0)),
+            Vec2::new(10.0, 5.0)
+        );
+
         // Point outside (left)
-        assert_eq!(aabb.closest_point(Vec2::new(-5.0, 5.0)), Vec2::new(0.0, 5.0));
-        
+        assert_eq!(
+            aabb.closest_point(Vec2::new(-5.0, 5.0)),
+            Vec2::new(0.0, 5.0)
+        );
+
         // Point outside (top)
-        assert_eq!(aabb.closest_point(Vec2::new(5.0, 15.0)), Vec2::new(5.0, 10.0));
-        
+        assert_eq!(
+            aabb.closest_point(Vec2::new(5.0, 15.0)),
+            Vec2::new(5.0, 10.0)
+        );
+
         // Point outside (bottom)
-        assert_eq!(aabb.closest_point(Vec2::new(5.0, -5.0)), Vec2::new(5.0, 0.0));
-        
+        assert_eq!(
+            aabb.closest_point(Vec2::new(5.0, -5.0)),
+            Vec2::new(5.0, 0.0)
+        );
+
         // Point outside (corner)
-        assert_eq!(aabb.closest_point(Vec2::new(15.0, 15.0)), Vec2::new(10.0, 10.0));
+        assert_eq!(
+            aabb.closest_point(Vec2::new(15.0, 15.0)),
+            Vec2::new(10.0, 10.0)
+        );
     }
 
     #[test]
     fn test_distance() {
         let aabb = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
-        
+
         // Point inside
         assert_eq!(aabb.distance_to_point(Vec2::new(5.0, 5.0)), 0.0);
-        
+
         // Point outside
-        assert!(approx_eq_eps(aabb.distance_to_point(Vec2::new(15.0, 15.0)), 5.0 * (2.0_f32).sqrt(), 1e-5));
-        
+        assert!(approx_eq_eps(
+            aabb.distance_to_point(Vec2::new(15.0, 15.0)),
+            5.0 * (2.0_f32).sqrt(),
+            1e-5
+        ));
+
         // Point at edge
         assert!(approx_eq(aabb.distance_to_point(Vec2::new(10.0, 5.0)), 0.0));
     }
@@ -648,21 +661,21 @@ mod tests {
     #[test]
     fn test_ray_cast() {
         let aabb = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
-        
+
         // Ray from outside, hitting the AABB
         let hit = aabb.ray_cast(Vec2::new(-5.0, 5.0), Vec2::new(1.0, 0.0), 100.0);
         assert!(hit.is_some());
         assert!(approx_eq_eps(hit.unwrap(), 5.0, 1e-5));
-        
+
         // Ray from inside
         let hit2 = aabb.ray_cast(Vec2::new(5.0, 5.0), Vec2::new(1.0, 0.0), 100.0);
         assert!(hit2.is_some());
         assert!(approx_eq_eps(hit2.unwrap(), 0.0, 1e-5));
-        
+
         // Ray missing the AABB
         let hit3 = aabb.ray_cast(Vec2::new(-5.0, 15.0), Vec2::new(1.0, 0.0), 100.0);
         assert!(hit3.is_none());
-        
+
         // Ray with limited range
         let hit4 = aabb.ray_cast(Vec2::new(-5.0, 5.0), Vec2::new(1.0, 0.0), 3.0);
         assert!(hit4.is_none());
@@ -683,7 +696,7 @@ mod tests {
         let aabb1 = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let aabb2 = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let aabb3 = Aabb::new(Vec2::new(0.0, 0.0), Vec2::new(10.0 + EPSILON, 10.0));
-        
+
         assert_eq!(aabb1, aabb2);
         assert_eq!(aabb1, aabb3);
     }

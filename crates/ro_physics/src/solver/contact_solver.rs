@@ -5,10 +5,10 @@
 
 use std::collections::HashMap;
 
+use super::{SequentialImpulseSolver, SolverConfig};
 use crate::bodies::{Body, BodyHandle};
 use crate::collision::ContactManifold;
 use crate::math::Vec2;
-use super::{SequentialImpulseSolver, SolverConfig};
 
 /// Contact solver that resolves collisions between bodies.
 ///
@@ -66,7 +66,8 @@ impl ContactSolver {
         dt: f32,
         body_indices: &HashMap<BodyHandle, usize>,
     ) {
-        self.solver.solve_contacts(bodies, manifolds, dt, body_indices);
+        self.solver
+            .solve_contacts(bodies, manifolds, dt, body_indices);
     }
 }
 
@@ -86,12 +87,6 @@ mod tests {
         let solver = ContactSolver::new(SolverConfig::default());
         assert_eq!(solver.config().velocity_iterations, 8);
     }
-
-
-
-
-
-
 
     #[test]
     fn test_solve_updates_bodies_in_place() {

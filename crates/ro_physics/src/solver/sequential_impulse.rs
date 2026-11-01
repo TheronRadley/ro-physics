@@ -21,11 +21,11 @@
 
 use std::collections::HashMap;
 
+use super::SolverConfig;
 use crate::bodies::{Body, BodyHandle};
 use crate::collision::ContactManifold;
 use crate::constants::{EPSILON, LINEAR_SLOP};
 use crate::math::Vec2;
-use super::SolverConfig;
 
 /// A single contact point prepared for solving.
 #[derive(Debug, Clone, Copy)]
@@ -103,7 +103,8 @@ impl SequentialImpulseSolver {
                 continue;
             }
 
-            let Some((index_a, index_b)) = resolve_pair(manifold.body_a(), manifold.body_b(), body_indices)
+            let Some((index_a, index_b)) =
+                resolve_pair(manifold.body_a(), manifold.body_b(), body_indices)
             else {
                 continue;
             };
@@ -144,7 +145,8 @@ impl SequentialImpulseSolver {
             0.0
         };
 
-        let mut constraints = self.prepare_constraints(body_a, body_b, manifold, inv_dt, restitution);
+        let mut constraints =
+            self.prepare_constraints(body_a, body_b, manifold, inv_dt, restitution);
         if constraints.is_empty() {
             return;
         }
@@ -211,17 +213,19 @@ impl SequentialImpulseSolver {
                 0.0
             } else {
                 let push = (separation + LINEAR_SLOP).min(0.0);
-                (-self.config.baumgarte_factor * inv_dt * push).min(self.config.max_position_correction * inv_dt)
+                (-self.config.baumgarte_factor * inv_dt * push)
+                    .min(self.config.max_position_correction * inv_dt)
             };
 
             // Restitution only kicks in above the configured threshold and is
             // based on the approach velocity measured before solving.
             let approach = relative_velocity(body_a, body_b, ra, rb).dot(normal);
-            let restitution_bias = if restitution > 0.0 && approach < -self.config.restitution_threshold {
-                -restitution * approach
-            } else {
-                0.0
-            };
+            let restitution_bias =
+                if restitution > 0.0 && approach < -self.config.restitution_threshold {
+                    -restitution * approach
+                } else {
+                    0.0
+                };
 
             constraints.push(ContactConstraint {
                 index,
@@ -479,8 +483,17 @@ mod tests {
         body
     }
 
-    fn manifold_between(handle_a: BodyHandle, handle_b: BodyHandle, contacts: Vec<Contact>) -> ContactManifold {
-        let mut manifold = ContactManifold::between(handle_a, handle_b, ColliderHandle::null(), ColliderHandle::null());
+    fn manifold_between(
+        handle_a: BodyHandle,
+        handle_b: BodyHandle,
+        contacts: Vec<Contact>,
+    ) -> ContactManifold {
+        let mut manifold = ContactManifold::between(
+            handle_a,
+            handle_b,
+            ColliderHandle::null(),
+            ColliderHandle::null(),
+        );
         for contact in contacts {
             manifold.add_contact(
                 contact.position(),
@@ -590,7 +603,11 @@ mod tests {
 
         let a = bodies[0].as_ref().expect("body a");
         // The body must no longer be moving into the ground
-        assert!(a.linear_velocity().y >= -1e-3, "velocity {}", a.linear_velocity().y);
+        assert!(
+            a.linear_velocity().y >= -1e-3,
+            "velocity {}",
+            a.linear_velocity().y
+        );
     }
 
     #[test]
@@ -699,7 +716,11 @@ mod tests {
 
         let a = bodies[0].as_ref().expect("body a");
         // Restitution 0.8 on a 5 m/s impact leaves about 4 m/s of separation
-        assert!(a.linear_velocity().y > 3.0, "velocity {}", a.linear_velocity().y);
+        assert!(
+            a.linear_velocity().y > 3.0,
+            "velocity {}",
+            a.linear_velocity().y
+        );
     }
 
     #[test]
@@ -738,7 +759,8 @@ mod tests {
 
     #[test]
     fn test_unknown_and_equal_handles_are_skipped() {
-        let mut bodies: Vec<Option<Body>> = vec![Some(dynamic(BodyHandle::new(1, 0), Vec2::zero()))];
+        let mut bodies: Vec<Option<Body>> =
+            vec![Some(dynamic(BodyHandle::new(1, 0), Vec2::zero()))];
         let mut indices = HashMap::new();
         indices.insert(BodyHandle::new(1, 0), 0);
 
@@ -802,7 +824,11 @@ mod tests {
         );
 
         let a = bodies[0].as_ref().expect("body a");
-        assert!(a.position().y > 0.9, "body should be pushed out, y = {}", a.position().y);
+        assert!(
+            a.position().y > 0.9,
+            "body should be pushed out, y = {}",
+            a.position().y
+        );
     }
 
     #[test]
@@ -828,7 +854,12 @@ mod tests {
         indices.insert(handle_b, 1);
 
         let solver = SequentialImpulseSolver::default();
-        solver.solve_contacts(&mut bodies, std::slice::from_mut(&mut manifold), 0.0, &indices);
+        solver.solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            0.0,
+            &indices,
+        );
         solver.solve_contacts(
             &mut bodies,
             std::slice::from_mut(&mut manifold),

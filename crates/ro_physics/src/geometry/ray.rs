@@ -11,7 +11,10 @@ use crate::math::Vec2;
 /// A ray is defined by an origin point and a direction vector.
 /// The direction does not need to be normalized.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Ray {
     /// Origin point of the ray
     pub origin: Vec2,
@@ -123,7 +126,7 @@ mod tests {
     #[test]
     fn test_point_at() {
         let ray = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
-        
+
         let p1 = ray.point_at(5.0);
         assert_eq!(p1, Vec2::new(5.0, 0.0));
 
@@ -172,7 +175,7 @@ mod tests {
         let ray1 = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
         let ray2 = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
         let ray3 = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0 + EPSILON, 0.0));
-        
+
         assert_eq!(ray1, ray2);
         assert_eq!(ray1, ray3);
     }

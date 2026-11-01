@@ -41,8 +41,7 @@ impl Integrator for SemiImplicitEuler {
         // Time-correct damping: v /= (1 + damping * dt). Unlike a plain
         // `v * (1 - damping)` this is stable for any damping and timestep.
         let linear_velocity = new_linear_velocity / (1.0 + body.linear_damping().max(0.0) * dt);
-        let angular_velocity =
-            new_angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
+        let angular_velocity = new_angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
 
         // Update position
         let new_position = body.position() + linear_velocity * dt;
@@ -130,7 +129,7 @@ mod tests {
     #[test]
     fn test_semi_implicit_euler() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -146,7 +145,7 @@ mod tests {
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 0 + 1*0.1 = 0.1
         assert!(approx_eq_eps(body.linear_velocity().x, 0.1, 1e-5));
-        
+
         // x = x0 + v*dt = 0 + 0.1*0.1 = 0.01
         assert!(approx_eq_eps(body.position().x, 0.01, 1e-5));
     }
@@ -154,7 +153,7 @@ mod tests {
     #[test]
     fn test_symplectic_euler() {
         let integrator = SymplecticEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -169,7 +168,7 @@ mod tests {
 
         // x = x0 + v*dt = 0 + 1*0.1 = 0.1
         assert!(approx_eq_eps(body.position().x, 0.1, 1e-5));
-        
+
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 1 + 1*0.1 = 1.1
         assert!(approx_eq_eps(body.linear_velocity().x, 1.1, 1e-5));
@@ -178,7 +177,7 @@ mod tests {
     #[test]
     fn test_integrate_bodies() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle1 = BodyHandle::new(1, 0);
         let mut body1 = Body::new_dynamic(handle1);
         body1.set_mass_properties(10.0, 5.0);
@@ -212,7 +211,7 @@ mod tests {
     #[test]
     fn test_damping() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -231,7 +230,7 @@ mod tests {
     #[test]
     fn test_static_body() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_static(handle);
         body.set_linear_velocity(Vec2::new(10.0, 0.0));

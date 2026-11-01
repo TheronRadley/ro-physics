@@ -7,8 +7,8 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use ro_physics::prelude::*;
 use ro_physics::geometry::Aabb;
+use ro_physics::prelude::*;
 use ro_physics::shapes::Shape;
 
 /// Vertex for rendering
@@ -51,21 +51,21 @@ pub struct Renderer {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
-    
+
     // Render pipeline
     render_pipeline: wgpu::RenderPipeline,
-    
+
     // Vertex buffer
     vertex_buffer: wgpu::Buffer,
     vertices: Vec<Vertex>,
-    
+
     // Index buffer
     index_buffer: wgpu::Buffer,
     indices: Vec<u16>,
-    
+
     // Camera
     camera: Camera,
-    
+
     // Debug flags
     debug_flags: DebugFlags,
 }
@@ -95,15 +95,11 @@ impl Camera {
 
     /// Get the view projection matrix
     #[must_use]
-    pub fn get_view_projection(
-        &self,
-        width: f32,
-        height: f32,
-    ) -> [[f32; 4]; 4] {
+    pub fn get_view_projection(&self, width: f32, height: f32) -> [[f32; 4]; 4] {
         // 2D orthographic projection
         let scale_x = 2.0 / width * self.scale;
         let scale_y = 2.0 / height * self.scale;
-        
+
         let translate_x = -self.position.x * scale_x;
         let translate_y = -self.position.y * scale_y;
 
@@ -206,11 +202,12 @@ impl Renderer {
         });
 
         // Render pipeline
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[],
+                push_constant_ranges: &[],
+            });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -310,7 +307,7 @@ impl Renderer {
                 if let Some(body) = world.get_body(collider.body_handle()) {
                     let transform = body.transform();
                     let shape = collider.shape();
-                    
+
                     self.add_shape(shape, transform, body, collider);
                 }
             }
@@ -330,24 +327,34 @@ impl Renderer {
 
         // Upload to GPU
         if !self.vertices.is_empty() {
-            self.vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+            self.vertex_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&self.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
         }
 
         if !self.indices.is_empty() {
-            self.index_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&self.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+            self.index_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&self.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
         }
     }
 
     /// Add a shape to the render list
-    fn add_shape(&mut self, shape: &Shape, transform: Transform, body: &Body, _collider: &Collider) {
+    fn add_shape(
+        &mut self,
+        shape: &Shape,
+        transform: Transform,
+        body: &Body,
+        _collider: &Collider,
+    ) {
         let color = if body.is_sleeping() && self.debug_flags.show_sleeping {
             [0.5, 0.5, 0.5] // Gray for sleeping bodies
         } else if body.is_static() {
@@ -386,11 +393,11 @@ impl Renderer {
             let angle = 2.0 * std::f32::consts::PI * (i as f32) / (segments as f32);
             let x = radius * angle.cos();
             let y = radius * angle.sin();
-            
+
             // Rotate by body rotation
             let rotated_x = x * transform.rotation.cos() - y * transform.rotation.sin();
             let rotated_y = x * transform.rotation.sin() + y * transform.rotation.cos();
-            
+
             self.vertices.push(Vertex {
                 position: [
                     transform.position.x + rotated_x,
@@ -417,9 +424,11 @@ impl Renderer {
         // Add vertices
         for vertex in vertices {
             // Rotate vertex
-            let rotated_x = vertex.x * transform.rotation.cos() - vertex.y * transform.rotation.sin();
-            let rotated_y = vertex.x * transform.rotation.sin() + vertex.y * transform.rotation.cos();
-            
+            let rotated_x =
+                vertex.x * transform.rotation.cos() - vertex.y * transform.rotation.sin();
+            let rotated_y =
+                vertex.x * transform.rotation.sin() + vertex.y * transform.rotation.cos();
+
             self.vertices.push(Vertex {
                 position: [
                     transform.position.x + rotated_x,
@@ -464,7 +473,7 @@ impl Renderer {
         self.indices.push(start_idx);
         self.indices.push(start_idx + 1);
         self.indices.push(start_idx + 2);
-        
+
         self.indices.push(start_idx);
         self.indices.push(start_idx + 2);
         self.indices.push(start_idx + 3);

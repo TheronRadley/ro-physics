@@ -23,7 +23,10 @@ use crate::shapes::{is_convex, MassProperties, ShapeError, ShapeType};
 /// * `normals[i]` is the outward unit normal of the edge
 ///   `vertices[i] -> vertices[i + 1]`
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Polygon {
     /// Vertices of the polygon in counter-clockwise order
     pub vertices: Vec<Vec2>,
@@ -482,7 +485,10 @@ mod tests {
 
         // For a rectangle: I = (m * (w^2 + h^2)) / 12
         let expected = (mass * (2.0 * 2.0 + 4.0 * 4.0)) / 12.0;
-        assert!(approx_eq_eps(inertia, expected, 1e-4), "{inertia} != {expected}");
+        assert!(
+            approx_eq_eps(inertia, expected, 1e-4),
+            "{inertia} != {expected}"
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@
 //!
 //! This module provides serialization and deserialization for physics types.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Serialization utilities
 pub mod utils {
@@ -32,7 +32,9 @@ pub mod utils {
     /// # Errors
     ///
     /// Returns an error when `ron` is not valid RON for `T`.
-    pub fn from_ron<T: for<'de> Deserialize<'de>>(ron: &str) -> Result<T, ron::error::SpannedError> {
+    pub fn from_ron<T: for<'de> Deserialize<'de>>(
+        ron: &str,
+    ) -> Result<T, ron::error::SpannedError> {
         ron::from_str(ron)
     }
 
@@ -59,7 +61,7 @@ mod tests {
     #[test]
     fn test_json_serialization() {
         let vec = Vec2::new(1.0, 2.0);
-        
+
         let json = to_json(&vec).unwrap();
         assert!(json.contains("1.0"));
         assert!(json.contains("2.0"));
@@ -71,7 +73,7 @@ mod tests {
     #[test]
     fn test_ron_serialization() {
         let vec = Vec2::new(1.0, 2.0);
-        
+
         let ron = to_ron(&vec).unwrap();
         assert!(ron.contains("1.0"));
         assert!(ron.contains("2.0"));
@@ -83,7 +85,7 @@ mod tests {
     #[test]
     fn test_binary_serialization() {
         let vec = Vec2::new(1.0, 2.0);
-        
+
         let bytes = to_binary(&vec).unwrap();
         assert!(!bytes.is_empty());
 

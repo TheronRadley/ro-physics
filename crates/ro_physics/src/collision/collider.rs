@@ -5,14 +5,17 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use super::Filter;
 use crate::bodies::BodyHandle;
 use crate::math::Transform;
 use crate::shapes::Shape;
-use super::Filter;
 
 /// A handle to a collider
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ColliderHandle {
     /// Unique identifier for the collider
     pub id: u64,
@@ -67,7 +70,11 @@ impl fmt::Display for ColliderHandle {
         if self.is_null() {
             write!(f, "ColliderHandle(null)")
         } else {
-            write!(f, "ColliderHandle(id: {}, gen: {})", self.id, self.generation)
+            write!(
+                f,
+                "ColliderHandle(id: {}, gen: {})",
+                self.id, self.generation
+            )
         }
     }
 }
@@ -113,7 +120,10 @@ impl Default for ColliderHandleGenerator {
 ///
 /// Colliders define the shape and collision properties of a body.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Collider {
     /// Handle to this collider
     handle: ColliderHandle,
@@ -139,11 +149,7 @@ impl Collider {
     /// Create a new collider
     #[inline]
     #[must_use]
-    pub fn new(
-        handle: ColliderHandle,
-        body_handle: BodyHandle,
-        shape: Shape,
-    ) -> Self {
+    pub fn new(handle: ColliderHandle, body_handle: BodyHandle, shape: Shape) -> Self {
         Self {
             handle,
             body_handle,
@@ -512,7 +518,8 @@ mod tests {
         assert!(collider.is_valid());
         assert!(collider.validate());
 
-        let mut invalid_collider = Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
+        let mut invalid_collider =
+            Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
         invalid_collider.set_friction(f32::NAN);
         assert!(!invalid_collider.is_valid());
         assert!(!invalid_collider.validate());
@@ -542,5 +549,4 @@ mod tests {
     fn approx_eq(a: f32, b: f32) -> bool {
         (a - b).abs() <= 1e-6
     }
-
 }

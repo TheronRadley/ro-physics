@@ -1,10 +1,10 @@
 //! Circle-circle collision detection.
 
+use super::super::{ContactId, ContactManifold};
+use super::NarrowPhaseConfig;
 use crate::constants::EPSILON;
 use crate::math::{Transform, Vec2};
 use crate::shapes::Circle;
-use super::NarrowPhaseConfig;
-use super::super::{ContactId, ContactManifold};
 
 /// Detect collision between two circles.
 ///

@@ -44,7 +44,7 @@ fn test_step_simulation() {
     let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
 
     // Create a dynamic body
-    let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
+    let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), Rot2::new(0.0)));
     let _ = world.add_circle(body, 0.5, 1.0);
 
     // Create a static ground
@@ -56,7 +56,10 @@ fn test_step_simulation() {
 
     // Body should have fallen
     let body_after = world.get_body(body).unwrap();
-    assert!(body_after.position().y < 5.0, "Body should fall due to gravity");
+    assert!(
+        body_after.position().y < 5.0,
+        "Body should fall due to gravity"
+    );
 }
 
 #[test]
@@ -67,7 +70,7 @@ fn test_collision_detection() {
     let body1 = world.create_dynamic_body(Transform::identity());
     let _ = world.add_circle(body1, 1.0, 1.0);
 
-    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0),Rot2::new(0.0)));
+    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0), Rot2::new(0.0)));
     let _ = world.add_circle(body2, 1.0, 1.0);
 
     // Step the simulation
@@ -83,7 +86,8 @@ fn test_circle_vs_box_collision() {
     let mut world = World::default();
 
     // Create a dynamic circle
-    let circle_body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
+    let circle_body =
+        world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), Rot2::new(0.0)));
     let _ = world.add_circle(circle_body, 0.5, 1.0);
 
     // Create a static box
@@ -106,10 +110,10 @@ fn test_box_vs_box_collision() {
     let mut world = World::default();
 
     // Create two dynamic boxes
-    let body1 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
+    let body1 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), Rot2::new(0.0)));
     let _ = world.add_box(body1, Vec2::new(0.5, 0.5), 1.0);
 
-    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 6.0),Rot2::new(0.0)));
+    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 6.0), Rot2::new(0.0)));
     let _ = world.add_box(body2, Vec2::new(0.5, 0.5), 1.0);
 
     // Step the simulation
@@ -135,7 +139,7 @@ fn test_stacking_stability() {
     // Create a stack of boxes
     let mut y = 1.0;
     for _ in 0..5 {
-        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y),Rot2::new(0.0)));
+        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y), Rot2::new(0.0)));
         let _ = world.add_box(body, Vec2::new(1.0, 0.5), 1.0);
         y += 1.0;
     }
@@ -222,13 +226,15 @@ fn test_rotated_box_collision() {
     let mut world = World::default();
 
     // Create a static rotated box
-    let static_body = world.create_static_body(
-        Transform::new(Vec2::new(0.0, 0.0), Rot2::new(crate::constants::PI_OVER_FOUR))
-    );
+    let static_body = world.create_static_body(Transform::new(
+        Vec2::new(0.0, 0.0),
+        Rot2::new(crate::constants::PI_OVER_FOUR),
+    ));
     let _ = world.add_box(static_body, Vec2::new(2.0, 2.0), 1.0);
 
     // Create a dynamic circle
-    let circle_body = world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0),Rot2::new(0.0)));
+    let circle_body =
+        world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0), Rot2::new(0.0)));
     let _ = world.add_circle(circle_body, 1.0, 1.0);
 
     // Step the simulation
@@ -251,7 +257,7 @@ fn test_event_handlers() {
     let body1 = world.create_dynamic_body(Transform::identity());
     let _ = world.add_circle(body1, 1.0, 1.0);
 
-    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0),Rot2::new(0.0)));
+    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0), Rot2::new(0.0)));
     let _ = world.add_circle(body2, 1.0, 1.0);
 
     // Step the simulation
@@ -284,7 +290,7 @@ fn test_clear_world() {
     let body1 = world.create_dynamic_body(Transform::identity());
     let _ = world.add_circle(body1, 1.0, 1.0);
 
-    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.0, 0.0),Rot2::new(0.0)));
+    let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.0, 0.0), Rot2::new(0.0)));
     let _ = world.add_circle(body2, 1.0, 1.0);
 
     assert_eq!(world.body_count(), 2);

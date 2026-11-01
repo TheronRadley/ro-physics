@@ -14,7 +14,6 @@ use crate::math::utils::approx_eq;
 
 #[test]
 fn test_toi_circle_circle_identical_positions() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -25,9 +24,7 @@ fn test_toi_circle_circle_identical_positions() {
     let velocity_b = Vec2::zero();
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     // Already overlapping
@@ -37,7 +34,6 @@ fn test_toi_circle_circle_identical_positions() {
 
 #[test]
 fn test_toi_circle_circle_exact_contact() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -48,9 +44,7 @@ fn test_toi_circle_circle_exact_contact() {
     let velocity_b = Vec2::zero();
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     // Already touching - TOI should be 0
@@ -60,7 +54,6 @@ fn test_toi_circle_circle_exact_contact() {
 
 #[test]
 fn test_toi_circle_circle_parallel_motion() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -71,9 +64,7 @@ fn test_toi_circle_circle_parallel_motion() {
     let velocity_b = Vec2::new(1.0, 0.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     assert!(!result.is_colliding());
@@ -81,7 +72,6 @@ fn test_toi_circle_circle_parallel_motion() {
 
 #[test]
 fn test_toi_circle_circle_perpendicular_motion() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -92,9 +82,7 @@ fn test_toi_circle_circle_perpendicular_motion() {
     let velocity_b = Vec2::new(0.0, -5.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     assert!(result.is_colliding());
@@ -104,7 +92,6 @@ fn test_toi_circle_circle_perpendicular_motion() {
 
 #[test]
 fn test_toi_circle_circle_grazing() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -115,9 +102,7 @@ fn test_toi_circle_circle_grazing() {
     let velocity_b = Vec2::new(-1.0, 0.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     // Should detect the grazing collision
@@ -126,7 +111,6 @@ fn test_toi_circle_circle_grazing() {
 
 #[test]
 fn test_toi_circle_circle_different_radii() {
-
     let circle_a = Circle::new(0.5);
     let circle_b = Circle::new(2.0);
 
@@ -137,9 +121,7 @@ fn test_toi_circle_circle_different_radii() {
     let velocity_b = Vec2::new(-5.0, 0.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     assert!(result.is_colliding());
@@ -148,7 +130,6 @@ fn test_toi_circle_circle_different_radii() {
 
 #[test]
 fn test_toi_circle_circle_just_reaches() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -160,9 +141,7 @@ fn test_toi_circle_circle_just_reaches() {
     let velocity_b = Vec2::new(-60.0, 0.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     assert!(result.is_colliding());
@@ -171,7 +150,6 @@ fn test_toi_circle_circle_just_reaches() {
 
 #[test]
 fn test_toi_circle_circle_out_of_range() {
-
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
@@ -183,9 +161,7 @@ fn test_toi_circle_circle_out_of_range() {
     let velocity_b = Vec2::new(-10.0, 0.0);
 
     let result = TimeOfImpact::circle_circle(
-        &circle_a, position_a, velocity_a,
-        &circle_b, position_b, velocity_b,
-        20, 1e-4
+        &circle_a, position_a, velocity_a, &circle_b, position_b, velocity_b, 20, 1e-4,
     );
 
     assert!(!result.is_colliding());
@@ -211,9 +187,7 @@ fn test_swept_collision_static_bodies() {
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
     // Static bodies shouldn't collide in CCD
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // No collision expected since both are static
     assert!(result.is_none());
@@ -237,9 +211,7 @@ fn test_swept_collision_one_static() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Should detect collision with static body
     assert!(result.is_some());
@@ -265,9 +237,7 @@ fn test_swept_collision_already_overlapping() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Already overlapping - TOI should be 0
     assert!(result.is_some());
@@ -276,9 +246,7 @@ fn test_swept_collision_already_overlapping() {
 
 #[test]
 fn test_swept_collision_exact_toi() {
-    let detector = SweptCollisionDetector::new(
-        CcdConfig::new().with_toi_tolerance(1e-6)
-    );
+    let detector = SweptCollisionDetector::new(CcdConfig::new().with_toi_tolerance(1e-6));
 
     let handle_a = BodyHandle::new(1, 0);
     let mut body_a = Body::new_dynamic(handle_a);
@@ -296,9 +264,7 @@ fn test_swept_collision_exact_toi() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Should collide at TOI = 0.9 (distance 18, relative speed 20, need to cover 18-2=16, 16/20=0.8)
     // Actually: distance between centers = 20, sum of radii = 2, so need to cover 18
@@ -329,9 +295,7 @@ fn test_will_tunnel_slow_movement() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let will_tunnel = detector.will_tunnel(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Slow movement shouldn't tunnel
     assert!(!will_tunnel);
@@ -356,9 +320,7 @@ fn test_will_tunnel_very_fast() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let will_tunnel = detector.will_tunnel(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0
-    );
+    let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
     // Very fast movement will tunnel
     assert!(will_tunnel);
@@ -384,9 +346,7 @@ fn test_will_tunnel_both_moving() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let will_tunnel = detector.will_tunnel(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0
-    );
+    let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
     // Both moving fast toward each other will tunnel
     assert!(will_tunnel);
@@ -412,9 +372,7 @@ fn test_will_tunnel_small_colliders() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let will_tunnel = detector.will_tunnel(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0
-    );
+    let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
     // Small colliders with moderate speed will tunnel
     assert!(will_tunnel);
@@ -424,9 +382,7 @@ fn test_will_tunnel_small_colliders() {
 
 #[test]
 fn test_swept_collision_circle_polygon() {
-    let detector = SweptCollisionDetector::new(
-        CcdConfig::new().with_enabled(true)
-    );
+    let detector = SweptCollisionDetector::new(CcdConfig::new().with_enabled(true));
 
     let handle_a = BodyHandle::new(1, 0);
     let mut body_a = Body::new_dynamic(handle_a);
@@ -438,7 +394,7 @@ fn test_swept_collision_circle_polygon() {
     body_b.set_position(Vec2::new(4.0, 0.0));
 
     let shape_a = Shape::Circle(Circle::new(1.0));
-    
+
     // Create a square polygon
     let vertices = vec![
         Vec2::new(-0.5, -0.5),
@@ -451,9 +407,7 @@ fn test_swept_collision_circle_polygon() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Should detect collision
     assert!(result.is_some());
@@ -461,9 +415,7 @@ fn test_swept_collision_circle_polygon() {
 
 #[test]
 fn test_swept_collision_polygon_polygon() {
-    let detector = SweptCollisionDetector::new(
-        CcdConfig::new().with_enabled(true)
-    );
+    let detector = SweptCollisionDetector::new(CcdConfig::new().with_enabled(true));
 
     let handle_a = BodyHandle::new(1, 0);
     let mut body_a = Body::new_dynamic(handle_a);
@@ -495,9 +447,7 @@ fn test_swept_collision_polygon_polygon() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Should detect collision
     assert!(result.is_some());
@@ -560,9 +510,7 @@ fn test_swept_detector_construction() {
 
 #[test]
 fn test_swept_detector_disabled() {
-    let detector = SweptCollisionDetector::new(
-        CcdConfig::new().with_enabled(false)
-    );
+    let detector = SweptCollisionDetector::new(CcdConfig::new().with_enabled(false));
 
     let handle_a = BodyHandle::new(1, 0);
     let body_a = Body::new_dynamic(handle_a);
@@ -576,9 +524,7 @@ fn test_swept_detector_disabled() {
     let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
     let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-    let result = detector.check_swept_collision(
-        &body_a, &collider_a, &body_b, &collider_b, 1.0
-    );
+    let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0);
 
     // Should return None when CCD is disabled
     assert!(result.is_none());

@@ -417,8 +417,16 @@ fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f
     use crate::constants::EPSILON;
 
     let inv_direction = Vec2::new(
-        if direction.x.abs() > EPSILON { 1.0 / direction.x } else { f32::INFINITY },
-        if direction.y.abs() > EPSILON { 1.0 / direction.y } else { f32::INFINITY },
+        if direction.x.abs() > EPSILON {
+            1.0 / direction.x
+        } else {
+            f32::INFINITY
+        },
+        if direction.y.abs() > EPSILON {
+            1.0 / direction.y
+        } else {
+            f32::INFINITY
+        },
     );
 
     let mut t_min: f32 = 0.0;
@@ -446,8 +454,8 @@ fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collision::ColliderHandle;
     use crate::bodies::BodyHandle;
+    use crate::collision::ColliderHandle;
 
     #[test]
     fn test_bvh_construction() {
@@ -492,15 +500,9 @@ mod tests {
             Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
         ];
 
-        let handles = vec![
-            ColliderHandle::new(1, 0),
-            ColliderHandle::new(2, 0),
-        ];
+        let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
 
-        let body_handles = vec![
-            BodyHandle::new(1, 0),
-            BodyHandle::new(2, 0),
-        ];
+        let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
         let mut bvh = Bvh::new();
         bvh.build(aabbs, handles, body_handles);
@@ -527,15 +529,9 @@ mod tests {
             Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
         ];
 
-        let handles = vec![
-            ColliderHandle::new(1, 0),
-            ColliderHandle::new(2, 0),
-        ];
+        let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
 
-        let body_handles = vec![
-            BodyHandle::new(1, 0),
-            BodyHandle::new(2, 0),
-        ];
+        let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
         let mut bvh = Bvh::new();
         bvh.build(aabbs, handles, body_handles);

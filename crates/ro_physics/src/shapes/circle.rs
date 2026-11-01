@@ -14,7 +14,10 @@ use crate::shapes::{MassProperties, ShapeError, ShapeType};
 /// Circles are defined by their radius and are the simplest
 /// shape for collision detection.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Circle {
     /// Radius of the circle
     pub radius: f32,
@@ -192,10 +195,13 @@ mod tests {
     #[test]
     fn test_properties() {
         let circle = Circle::new(5.0);
-        
+
         assert_eq!(circle.diameter(), 10.0);
         assert!(approx_eq(circle.area(), 25.0 * std::f32::consts::PI));
-        assert!(approx_eq(circle.circumference(), 10.0 * std::f32::consts::PI));
+        assert!(approx_eq(
+            circle.circumference(),
+            10.0 * std::f32::consts::PI
+        ));
     }
 
     #[test]
@@ -211,11 +217,11 @@ mod tests {
         let circle = Circle::new(5.0);
         let density = 2.0;
         let mp = circle.mass_properties(density);
-        
+
         let expected_area = circle.area();
         let expected_mass = expected_area * density;
         let expected_inertia = circle.inertia(expected_mass);
-        
+
         assert!(approx_eq(mp.mass, expected_mass));
         assert!(approx_eq(mp.inertia, expected_inertia));
         assert_eq!(mp.center_of_mass, Vec2::zero());
@@ -226,7 +232,7 @@ mod tests {
         let circle = Circle::new(5.0);
         let center = Vec2::new(10.0, 20.0);
         let aabb = circle.aabb(center);
-        
+
         assert_eq!(aabb.min, Vec2::new(5.0, 15.0));
         assert_eq!(aabb.max, Vec2::new(15.0, 25.0));
     }
@@ -235,16 +241,16 @@ mod tests {
     fn test_contains_point() {
         let circle = Circle::new(5.0);
         let center = Vec2::new(10.0, 10.0);
-        
+
         // Point at center
         assert!(circle.contains_point(center, center));
-        
+
         // Point on edge
         assert!(circle.contains_point(Vec2::new(15.0, 10.0), center));
-        
+
         // Point inside
         assert!(circle.contains_point(Vec2::new(12.0, 10.0), center));
-        
+
         // Point outside
         assert!(!circle.contains_point(Vec2::new(20.0, 10.0), center));
     }
@@ -253,19 +259,16 @@ mod tests {
     fn test_closest_point() {
         let circle = Circle::new(5.0);
         let center = Vec2::new(10.0, 10.0);
-        
+
         // Point at center
-        assert_eq!(
-            circle.closest_point(center, center),
-            center
-        );
-        
+        assert_eq!(circle.closest_point(center, center), center);
+
         // Point inside
         assert_eq!(
             circle.closest_point(Vec2::new(12.0, 10.0), center),
             Vec2::new(12.0, 10.0)
         );
-        
+
         // Point outside
         let closest = circle.closest_point(Vec2::new(20.0, 10.0), center);
         assert!(approx_eq(closest.x, 15.0));
@@ -276,13 +279,13 @@ mod tests {
     fn test_distance_to_point() {
         let circle = Circle::new(5.0);
         let center = Vec2::new(10.0, 10.0);
-        
+
         // Point at center
         assert_eq!(circle.distance_to_point(center, center), 0.0);
-        
+
         // Point on edge
         assert_eq!(circle.distance_to_point(Vec2::new(15.0, 10.0), center), 0.0);
-        
+
         // Point outside
         assert_eq!(circle.distance_to_point(Vec2::new(20.0, 10.0), center), 5.0);
     }
@@ -308,7 +311,9 @@ mod tests {
         assert!(!circle3.is_valid());
         assert!(!circle3.validate());
 
-        let circle4 = Circle { radius: f32::INFINITY };
+        let circle4 = Circle {
+            radius: f32::INFINITY,
+        };
         assert!(!circle4.is_valid());
         assert!(!circle4.validate());
 

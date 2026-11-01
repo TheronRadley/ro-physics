@@ -11,7 +11,10 @@ use std::fmt;
 /// - Each body has a mask specifying which categories it can collide with (bits 0-15)
 /// - Two bodies collide if (categoryA & maskB) != 0 and (categoryB & maskA) != 0
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Filter {
     /// Category bits (which categories this body belongs to)
     pub category_bits: u16,

@@ -10,7 +10,10 @@ use crate::geometry::Aabb;
 
 /// AABB query structure
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct AabbQuery {
     /// The AABB to query
     pub aabb: Aabb,
@@ -53,7 +56,10 @@ impl fmt::Display for AabbQuery {
 
 /// AABB query result
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct AabbQueryResult {
     /// Handle to the body that overlaps the AABB
     pub body_handle: BodyHandle,
@@ -142,10 +148,7 @@ mod tests {
 
     #[test]
     fn test_aabb_query_result() {
-        let result = AabbQueryResult::new(
-            BodyHandle::new(1, 0),
-            ColliderHandle::new(1, 0),
-        );
+        let result = AabbQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0));
 
         assert_eq!(result.body_handle(), BodyHandle::new(1, 0));
         assert_eq!(result.collider_handle(), ColliderHandle::new(1, 0));
@@ -160,10 +163,7 @@ mod tests {
 
     #[test]
     fn test_aabb_query_result_display() {
-        let result = AabbQueryResult::new(
-            BodyHandle::new(1, 0),
-            ColliderHandle::new(1, 0),
-        );
+        let result = AabbQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0));
 
         let result_str = format!("{}", result);
         assert!(result_str.contains("AabbQueryResult"));

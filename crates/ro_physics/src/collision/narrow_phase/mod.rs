@@ -5,13 +5,13 @@
 
 mod circle_circle;
 mod circle_polygon;
-mod polygon_polygon;
 mod config;
+mod polygon_polygon;
 
 pub use circle_circle::circle_circle_collision;
 pub use circle_polygon::circle_polygon_collision;
-pub use polygon_polygon::polygon_polygon_collision;
 pub use config::NarrowPhaseConfig;
+pub use polygon_polygon::polygon_polygon_collision;
 
 use crate::collision::{Collider, ContactManifold};
 use crate::math::Transform;
@@ -62,8 +62,12 @@ impl NarrowPhase {
         collider_b: &Collider,
         transform_b: Transform,
     ) -> Option<ContactManifold> {
-        let mut manifold =
-            self.collide_shapes(collider_a.shape(), transform_a, collider_b.shape(), transform_b)?;
+        let mut manifold = self.collide_shapes(
+            collider_a.shape(),
+            transform_a,
+            collider_b.shape(),
+            transform_b,
+        )?;
 
         manifold.set_pair(
             collider_a.body_handle(),
@@ -95,13 +99,9 @@ impl NarrowPhase {
         use crate::shapes::Shape::{Circle, Polygon};
 
         match (shape_a, shape_b) {
-            (Circle(circle_a), Circle(circle_b)) => circle_circle_collision(
-                circle_a,
-                transform_a,
-                circle_b,
-                transform_b,
-                &self.config,
-            ),
+            (Circle(circle_a), Circle(circle_b)) => {
+                circle_circle_collision(circle_a, transform_a, circle_b, transform_b, &self.config)
+            }
             (Circle(circle_a), Polygon(polygon_b)) => circle_polygon_collision(
                 circle_a,
                 transform_a,

@@ -5,9 +5,9 @@
 
 use std::fmt;
 
+use super::ConstraintHandle;
 use crate::bodies::{Body, BodyHandle};
 use crate::math::Vec2;
-use super::ConstraintHandle;
 
 /// A constraint that connects two bodies together.
 ///
@@ -33,12 +33,7 @@ pub trait Constraint: fmt::Debug + Send + Sync {
     fn set_enabled(&mut self, enabled: bool);
 
     /// Pre-solve the constraint (calculate mass matrix, bias, etc.)
-    fn pre_solve(
-        &mut self,
-        body_a: &Body,
-        body_b: &Body,
-        dt: f32,
-    );
+    fn pre_solve(&mut self, body_a: &Body, body_b: &Body, dt: f32);
 
     /// Solve the constraint (apply impulses to satisfy the constraint)
     fn solve(&mut self, body_a: &mut Body, body_b: &mut Body);
@@ -59,7 +54,10 @@ pub trait Constraint: fmt::Debug + Send + Sync {
 
 /// Base struct for all constraints
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct BaseConstraint {
     /// Handle to this constraint
     handle: ConstraintHandle,
@@ -77,11 +75,7 @@ impl BaseConstraint {
     /// Create a new base constraint
     #[inline]
     #[must_use]
-    pub const fn new(
-        handle: ConstraintHandle,
-        body_a: BodyHandle,
-        body_b: BodyHandle,
-    ) -> Self {
+    pub const fn new(handle: ConstraintHandle, body_a: BodyHandle, body_b: BodyHandle) -> Self {
         Self {
             handle,
             body_a,
@@ -141,7 +135,10 @@ impl BaseConstraint {
 
 /// Enum of all constraint types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum ConstraintType {
     /// Distance joint (point-to-point constraint)
     Distance,
@@ -164,8 +161,8 @@ impl fmt::Display for ConstraintType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraints::ConstraintHandle;
     use crate::bodies::BodyHandle;
+    use crate::constraints::ConstraintHandle;
 
     #[test]
     fn test_base_constraint() {

@@ -4,14 +4,14 @@
 //! to prevent tunneling in fast-moving objects.
 
 mod config;
-mod toi;
 mod swept_collision;
 #[cfg(test)]
 mod tests;
+mod toi;
 
 pub use config::CcdConfig;
-pub use toi::{TimeOfImpact, ToiResult};
 pub use swept_collision::{CcdResult, SweptCollisionDetector};
+pub use toi::{TimeOfImpact, ToiResult};
 
 /// CCD utilities
 pub mod utils {

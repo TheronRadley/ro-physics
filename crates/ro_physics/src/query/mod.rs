@@ -2,17 +2,17 @@
 //!
 //! This module provides spatial query operations for the physics world.
 
-mod point_query;
 mod aabb_query;
-mod ray_cast;
 mod bvh;
+mod point_query;
+mod ray_cast;
 #[cfg(test)]
 mod tests;
 
-pub use point_query::{PointQuery, PointQueryResult};
 pub use aabb_query::{AabbQuery, AabbQueryResult};
-pub use ray_cast::{RayCast, RayCastOptions, RayCastResult};
 pub use bvh::Bvh;
+pub use point_query::{PointQuery, PointQueryResult};
+pub use ray_cast::{RayCast, RayCastOptions, RayCastResult};
 
 use crate::geometry::{Aabb, Ray};
 use crate::math::Vec2;
@@ -31,4 +31,3 @@ pub trait SpatialQuery: Send + Sync {
     /// Cast a ray and return all hits
     fn ray_cast_all(&self, ray: Ray, max_distance: f32) -> Vec<RayCastResult>;
 }
-

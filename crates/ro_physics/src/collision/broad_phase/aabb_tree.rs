@@ -231,12 +231,7 @@ impl AabbTree {
     /// panicking.
     #[inline]
     #[must_use]
-    pub fn query_ray(
-        &self,
-        origin: Vec2,
-        direction: Vec2,
-        max_distance: f32,
-    ) -> Vec<(usize, f32)> {
+    pub fn query_ray(&self, origin: Vec2, direction: Vec2, max_distance: f32) -> Vec<(usize, f32)> {
         let mut results = Vec::new();
         if self.root == NULL {
             return results;
@@ -372,7 +367,8 @@ impl AabbTree {
             let right = self.nodes[index].right;
 
             let combined = self.nodes[index].aabb.union(leaf_aabb);
-            let inheritance_cost = 2.0 * (combined.perimeter() - self.nodes[index].aabb.perimeter());
+            let inheritance_cost =
+                2.0 * (combined.perimeter() - self.nodes[index].aabb.perimeter());
 
             let cost_left = insertion_cost(&self.nodes[left], leaf_aabb) + inheritance_cost;
             let cost_right = insertion_cost(&self.nodes[right], leaf_aabb) + inheritance_cost;
@@ -746,6 +742,11 @@ mod tests {
         tree.clear();
 
         assert_eq!(tree.node_count(), 0);
-        assert!(tree.query(Aabb::new(Vec2::new(-100.0, -100.0), Vec2::new(100.0, 100.0))).is_empty());
+        assert!(tree
+            .query(Aabb::new(
+                Vec2::new(-100.0, -100.0),
+                Vec2::new(100.0, 100.0)
+            ))
+            .is_empty());
     }
 }

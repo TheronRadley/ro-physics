@@ -10,7 +10,10 @@ use std::hash::Hash;
 /// Body handles are used to reference bodies after they are created.
 /// They are lightweight and can be copied freely.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct BodyHandle {
     /// Unique identifier for the body
     pub id: u64,

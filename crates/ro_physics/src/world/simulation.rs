@@ -22,6 +22,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+use super::WorldConfig;
 use crate::bodies::{Body, BodyHandle, BodyType};
 use crate::ccd::SweptCollisionDetector;
 use crate::collision::{
@@ -35,7 +36,6 @@ use crate::math::{Rot2, Transform, Vec2};
 use crate::query::{AabbQueryResult, PointQueryResult, RayCastResult};
 use crate::shapes::{Circle, Polygon, Shape};
 use crate::solver::ContactSolver;
-use super::WorldConfig;
 
 /// Maximum number of CCD sub-steps performed in a single simulation step.
 const MAX_CCD_SUBSTEPS: usize = 4;
@@ -458,7 +458,12 @@ impl World {
     /// properties untouched, which is what static bodies want.
     #[inline]
     #[must_use]
-    pub fn add_circle(&mut self, body_handle: BodyHandle, radius: f32, density: f32) -> ColliderHandle {
+    pub fn add_circle(
+        &mut self,
+        body_handle: BodyHandle,
+        radius: f32,
+        density: f32,
+    ) -> ColliderHandle {
         let Ok(circle) = Circle::try_new(radius) else {
             return ColliderHandle::null();
         };
@@ -469,7 +474,12 @@ impl World {
     /// Add a box shape to a body from its half extents
     #[inline]
     #[must_use]
-    pub fn add_box(&mut self, body_handle: BodyHandle, half_extents: Vec2, density: f32) -> ColliderHandle {
+    pub fn add_box(
+        &mut self,
+        body_handle: BodyHandle,
+        half_extents: Vec2,
+        density: f32,
+    ) -> ColliderHandle {
         let Ok(polygon) = Polygon::try_new(box_vertices(half_extents)) else {
             return ColliderHandle::null();
         };
@@ -523,7 +533,11 @@ impl World {
             return;
         }
 
-        let colliders = self.body_colliders.get(&body_handle).cloned().unwrap_or_default();
+        let colliders = self
+            .body_colliders
+            .get(&body_handle)
+            .cloned()
+            .unwrap_or_default();
 
         let mut mass = 0.0_f32;
         let mut inertia = 0.0_f32;
@@ -635,7 +649,11 @@ impl World {
     /// Create a motor joint between two bodies
     #[inline]
     #[must_use]
-    pub fn create_motor_joint(&mut self, body_a: BodyHandle, body_b: BodyHandle) -> ConstraintHandle {
+    pub fn create_motor_joint(
+        &mut self,
+        body_a: BodyHandle,
+        body_b: BodyHandle,
+    ) -> ConstraintHandle {
         if !self.has_body(body_a) || !self.has_body(body_b) || body_a == body_b {
             return ConstraintHandle::null();
         }
@@ -823,7 +841,9 @@ impl World {
         let mut hits = Vec::new();
 
         // Ask the broad-phase for candidates instead of scanning every collider
-        let candidates = self.broad_phase.query_ray(ray.origin, ray.direction, max_distance);
+        let candidates = self
+            .broad_phase
+            .query_ray(ray.origin, ray.direction, max_distance);
 
         for (handle, _) in candidates {
             let Some(collider) = self.get_collider(handle) else {
@@ -952,8 +972,10 @@ impl World {
         let pairs = self.broad_phase.find_collision_pairs();
         let previous = std::mem::take(&mut self.manifolds);
 
-        let mut manifolds: Vec<ContactManifold> = Vec::with_capacity(pairs.len().min(self.config.max_contacts));
-        let mut touching: HashSet<(ColliderHandle, ColliderHandle)> = HashSet::with_capacity(pairs.len());
+        let mut manifolds: Vec<ContactManifold> =
+            Vec::with_capacity(pairs.len().min(self.config.max_contacts));
+        let mut touching: HashSet<(ColliderHandle, ColliderHandle)> =
+            HashSet::with_capacity(pairs.len());
 
         for (handle_a, handle_b) in pairs {
             if manifolds.len() >= self.config.max_contacts {
@@ -966,7 +988,8 @@ impl World {
 
             // Warm start from the manifold of the previous step
             if let Some(old) = previous.iter().find(|old| {
-                old.collider_a() == manifold.collider_a() && old.collider_b() == manifold.collider_b()
+                old.collider_a() == manifold.collider_a()
+                    && old.collider_b() == manifold.collider_b()
             }) {
                 manifold.warm_start_from(old);
             }
@@ -997,11 +1020,8 @@ impl World {
                 .collect();
 
             for (handle_a, handle_b) in ended {
-                self.events.push(self.make_event(
-                    CollisionEventType::Ended,
-                    handle_a,
-                    handle_b,
-                ));
+                self.events
+                    .push(self.make_event(CollisionEventType::Ended, handle_a, handle_b));
             }
 
             self.touching_pairs = touching;
@@ -1011,7 +1031,11 @@ impl World {
     }
 
     /// Run the narrow-phase for a single pair of colliders
-    fn collide_pair(&self, handle_a: ColliderHandle, handle_b: ColliderHandle) -> Option<ContactManifold> {
+    fn collide_pair(
+        &self,
+        handle_a: ColliderHandle,
+        handle_b: ColliderHandle,
+    ) -> Option<ContactManifold> {
         let collider_a = self.get_collider(handle_a)?;
         let collider_b = self.get_collider(handle_b)?;
 
@@ -1038,7 +1062,11 @@ impl World {
 
         // Two non-dynamic bodies cannot resolve anything, but sensors still
         // need their overlap reported.
-        if !body_a.is_dynamic() && !body_b.is_dynamic() && !collider_a.is_sensor() && !collider_b.is_sensor() {
+        if !body_a.is_dynamic()
+            && !body_b.is_dynamic()
+            && !collider_a.is_sensor()
+            && !collider_b.is_sensor()
+        {
             return None;
         }
 
@@ -1072,13 +1100,7 @@ impl World {
             });
 
         CollisionEvent::new(
-            event_type,
-            body_a,
-            body_b,
-            handle_a,
-            handle_b,
-            sensor_a,
-            sensor_b,
+            event_type, body_a, body_b, handle_a, handle_b, sensor_a, sensor_b,
         )
     }
 
@@ -1194,9 +1216,9 @@ impl World {
                 continue;
             }
 
-            if let Some(result) =
-                self.swept_detector
-                    .check_swept_collision(body_a, collider_a, body_b, collider_b, dt)
+            if let Some(result) = self
+                .swept_detector
+                .check_swept_collision(body_a, collider_a, body_b, collider_b, dt)
             {
                 earliest = earliest.min(result.clamped_toi());
             }
@@ -1247,10 +1269,9 @@ impl World {
                 let body_a_handle = constraint.body_a();
                 let body_b_handle = constraint.body_b();
 
-                if let (Some(body_a), Some(body_b)) = (
-                    self.body_ref(body_a_handle),
-                    self.body_ref(body_b_handle),
-                ) {
+                if let (Some(body_a), Some(body_b)) =
+                    (self.body_ref(body_a_handle), self.body_ref(body_b_handle))
+                {
                     constraint.pre_solve(body_a, body_b, dt);
                 }
             }
@@ -1272,7 +1293,9 @@ impl World {
                     let body_a_handle = constraint.body_a();
                     let body_b_handle = constraint.body_b();
 
-                    if let Some((body_a, body_b)) = self.two_bodies_mut(body_a_handle, body_b_handle) {
+                    if let Some((body_a, body_b)) =
+                        self.two_bodies_mut(body_a_handle, body_b_handle)
+                    {
                         // Joints must not nudge a sleeping body: it is woken
                         // first (see `wake_islands`) when it really has to move.
                         if !body_a.is_sleeping() && !body_b.is_sleeping() {
@@ -1304,7 +1327,11 @@ impl World {
 
     /// Borrow two distinct bodies mutably at the same time
     #[inline]
-    fn two_bodies_mut(&mut self, handle_a: BodyHandle, handle_b: BodyHandle) -> Option<(&mut Body, &mut Body)> {
+    fn two_bodies_mut(
+        &mut self,
+        handle_a: BodyHandle,
+        handle_b: BodyHandle,
+    ) -> Option<(&mut Body, &mut Body)> {
         let index_a = *self.body_map.get(&handle_a)?;
         let index_b = *self.body_map.get(&handle_b)?;
         if index_a == index_b {
@@ -1508,10 +1535,15 @@ fn ray_cast_shape(
     let local_direction = ray.direction.rotate(-transform.rotation.angle());
 
     let (distance, local_normal) = match shape {
-        Shape::Circle(circle) => ray_cast_circle(local_origin, local_direction, max_distance, circle.radius())?,
-        Shape::Polygon(polygon) => {
-            ray_cast_polygon(local_origin, local_direction, max_distance, polygon.vertices())?
+        Shape::Circle(circle) => {
+            ray_cast_circle(local_origin, local_direction, max_distance, circle.radius())?
         }
+        Shape::Polygon(polygon) => ray_cast_polygon(
+            local_origin,
+            local_direction,
+            max_distance,
+            polygon.vertices(),
+        )?,
     };
 
     let hit_local = local_origin + local_direction * distance;
@@ -1530,7 +1562,12 @@ fn ray_cast_shape(
 
 /// Ray-circle intersection; returns the distance and the surface normal
 #[inline]
-fn ray_cast_circle(origin: Vec2, direction: Vec2, max_distance: f32, radius: f32) -> Option<(f32, Vec2)> {
+fn ray_cast_circle(
+    origin: Vec2,
+    direction: Vec2,
+    max_distance: f32,
+    radius: f32,
+) -> Option<(f32, Vec2)> {
     let a = direction.length_squared();
     if a <= EPSILON {
         return None;
@@ -1681,7 +1718,10 @@ mod tests {
         world.destroy_body(first);
         let second = world.create_dynamic_body(Transform::identity());
 
-        assert_ne!(first, second, "handles must not be reused without a new generation");
+        assert_ne!(
+            first, second,
+            "handles must not be reused without a new generation"
+        );
         assert!(world.has_body(second));
         assert!(!world.has_body(first));
         assert_eq!(world.body_count(), 1);
@@ -1691,7 +1731,8 @@ mod tests {
     fn test_get_body() {
         let mut world = World::default();
 
-        let handle = world.create_dynamic_body(Transform::new(Vec2::new(1.0, 2.0), Rot2::identity()));
+        let handle =
+            world.create_dynamic_body(Transform::new(Vec2::new(1.0, 2.0), Rot2::identity()));
 
         let body = world.get_body(handle);
         assert!(body.is_some());
@@ -1865,8 +1906,14 @@ mod tests {
         let mut started = 0;
         let mut persisted = 0;
         for _ in 0..40 {
-            world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(5.0, 0.0));
-            world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-5.0, 0.0));
+            world
+                .get_body_mut(a)
+                .expect("a")
+                .set_linear_velocity(Vec2::new(5.0, 0.0));
+            world
+                .get_body_mut(b)
+                .expect("b")
+                .set_linear_velocity(Vec2::new(-5.0, 0.0));
 
             world.step(1.0 / 60.0);
 
@@ -1933,13 +1980,17 @@ mod tests {
         let _ = world.add_box(body, Vec2::splat(1.0), 0.0);
 
         // Zero length direction
-        assert!(world.ray_cast(Ray::new(Vec2::zero(), Vec2::zero()), 10.0).is_none());
+        assert!(world
+            .ray_cast(Ray::new(Vec2::zero(), Vec2::zero()), 10.0)
+            .is_none());
         // Non finite ray
         assert!(world
             .ray_cast(Ray::new(Vec2::new(f32::NAN, 0.0), Vec2::unit_x()), 10.0)
             .is_none());
         // Non positive max distance
-        assert!(world.ray_cast(Ray::new(Vec2::zero(), Vec2::unit_x()), 0.0).is_none());
+        assert!(world
+            .ray_cast(Ray::new(Vec2::zero(), Vec2::unit_x()), 0.0)
+            .is_none());
         // Ray pointing away from the body
         assert!(world
             .ray_cast(Ray::new(Vec2::new(5.0, 0.0), Vec2::unit_x()), 10.0)
@@ -2057,12 +2108,8 @@ mod tests {
         let body_a = world.create_dynamic_body(Transform::identity());
         let body_b = world.create_dynamic_body(Transform::from_translation(Vec2::new(1.0, 0.0)));
 
-        let handle = world.create_distance_joint(
-            body_a,
-            body_b,
-            Vec2::new(0.5, 0.0),
-            Vec2::new(-0.5, 0.0),
-        );
+        let handle =
+            world.create_distance_joint(body_a, body_b, Vec2::new(0.5, 0.0), Vec2::new(-0.5, 0.0));
 
         assert!(world.has_constraint(handle));
         assert_eq!(world.constraint_count(), 1);
@@ -2132,8 +2179,7 @@ mod tests {
         let body_a = world.create_dynamic_body(Transform::identity());
         let _ = world.add_circle(body_a, 1.0, 1.0);
 
-        let body_b =
-            world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 2.0)));
+        let body_b = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 2.0)));
         let _ = world.add_circle(body_b, 1.0, 1.0);
 
         let _ = world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());

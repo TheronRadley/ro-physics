@@ -5,11 +5,11 @@
 
 use std::fmt;
 
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
+use crate::bodies::BodyHandle;
 use crate::constants::{EPSILON, PI};
 use crate::math::Vec2;
-use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 
 /// A revolute joint constraint.
 ///
@@ -17,7 +17,10 @@ use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 /// only relative rotation about that point. The bodies cannot translate
 /// relative to each other, but can rotate freely (or within limits).
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct RevoluteJoint {
     /// Base constraint data
     base: BaseConstraint,
@@ -373,9 +376,7 @@ impl Constraint for RevoluteJoint {
         self.mass_22 = mass.2;
 
         // Calculate effective mass for rotation constraint
-        self.rotation_effective_mass = self.calculate_rotation_effective_mass(
-            body_a, body_b
-        );
+        self.rotation_effective_mass = self.calculate_rotation_effective_mass(body_a, body_b);
 
         // Calculate position bias
         let position_error = anchor_b - anchor_a;
@@ -454,13 +455,11 @@ impl RevoluteJoint {
         let inv_inertia_a = body_a.inv_inertia();
         let inv_inertia_b = body_b.inv_inertia();
 
-        let k11 = inv_mass_a + inv_mass_b
-            + inv_inertia_a * ra.y * ra.y
-            + inv_inertia_b * rb.y * rb.y;
+        let k11 =
+            inv_mass_a + inv_mass_b + inv_inertia_a * ra.y * ra.y + inv_inertia_b * rb.y * rb.y;
         let k12 = -inv_inertia_a * ra.x * ra.y - inv_inertia_b * rb.x * rb.y;
-        let k22 = inv_mass_a + inv_mass_b
-            + inv_inertia_a * ra.x * ra.x
-            + inv_inertia_b * rb.x * rb.x;
+        let k22 =
+            inv_mass_a + inv_mass_b + inv_inertia_a * ra.x * ra.x + inv_inertia_b * rb.x * rb.x;
 
         (k11, k12, k22)
     }
@@ -562,7 +561,12 @@ impl RevoluteJoint {
     /// `angle_error` is the signed distance from the allowed range, so the
     /// joint is driven back towards the clamped angle.
     #[inline]
-    fn solve_angle_constraint(&self, body_a: &mut Body, body_b: &mut Body, angle_error: f32) -> f32 {
+    fn solve_angle_constraint(
+        &self,
+        body_a: &mut Body,
+        body_b: &mut Body,
+        angle_error: f32,
+    ) -> f32 {
         if self.rotation_effective_mass <= EPSILON {
             return 0.0;
         }
@@ -572,8 +576,7 @@ impl RevoluteJoint {
 
         // The accumulated impulse may only push the joint towards the limit,
         // never away from it, so it is clamped to the sign of the error.
-        let mut impulse =
-            (target_velocity - relative_velocity) * self.rotation_effective_mass;
+        let mut impulse = (target_velocity - relative_velocity) * self.rotation_effective_mass;
 
         if angle_error > 0.0 {
             // Below the lower limit: the joint may only push the angle up
@@ -648,8 +651,8 @@ impl fmt::Display for RevoluteJoint {
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
-    use crate::math::Rot2;
     use crate::math::utils::approx_eq;
+    use crate::math::Rot2;
 
     #[test]
     fn test_construction() {
@@ -677,7 +680,9 @@ mod tests {
         let body_b = BodyHandle::new(2, 0);
 
         let joint = RevoluteJoint::new_at_points(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
         );

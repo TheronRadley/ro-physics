@@ -5,11 +5,11 @@
 
 use std::fmt;
 
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
+use crate::bodies::BodyHandle;
 use crate::constants::EPSILON;
 use crate::math::Vec2;
-use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 
 /// A distance joint constraint.
 ///
@@ -17,7 +17,10 @@ use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 /// on two bodies. It can be configured to be rigid (exact distance) or
 /// soft (with limits).
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct DistanceJoint {
     /// Base constraint data
     base: BaseConstraint,
@@ -370,7 +373,8 @@ impl DistanceJoint {
         let ra_cross_dir = ra.cross(direction);
         let rb_cross_dir = rb.cross(direction);
 
-        let denominator = inv_mass_a + inv_mass_b
+        let denominator = inv_mass_a
+            + inv_mass_b
             + ra_cross_dir * ra_cross_dir * inv_inertia_a
             + rb_cross_dir * rb_cross_dir * inv_inertia_b;
 
@@ -505,7 +509,9 @@ mod tests {
         body_b_obj.set_position(Vec2::new(30.0, 40.0));
 
         let joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 2.0),
             Vec2::new(3.0, 4.0),
         );
@@ -530,7 +536,9 @@ mod tests {
         body_b_obj.set_position(Vec2::new(3.0, 4.0));
 
         let joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(0.0, 0.0),
             Vec2::new(0.0, 0.0),
         );
@@ -546,7 +554,9 @@ mod tests {
         let body_b = BodyHandle::new(2, 0);
 
         let mut joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
         );
@@ -580,7 +590,9 @@ mod tests {
         let body_b = BodyHandle::new(2, 0);
 
         let mut joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
         );
@@ -602,7 +614,9 @@ mod tests {
         let body_b = BodyHandle::new(2, 0);
 
         let joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
         );
@@ -624,7 +638,9 @@ mod tests {
         body_b_obj.set_position(Vec2::new(0.0, 0.0));
 
         let mut joint = DistanceJoint::new(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(0.0, 0.0),
             Vec2::new(0.0, 0.0),
         );

@@ -6,14 +6,14 @@
 mod constraint;
 mod constraint_handle;
 mod distance_joint;
-mod revolute_joint;
 mod motor_joint;
+mod revolute_joint;
 
 pub use constraint::{BaseConstraint, Constraint, ConstraintType};
 pub use constraint_handle::{ConstraintHandle, ConstraintHandleGenerator};
 pub use distance_joint::DistanceJoint;
-pub use revolute_joint::RevoluteJoint;
 pub use motor_joint::MotorJoint;
+pub use revolute_joint::RevoluteJoint;
 
 /// Constraint utilities
 pub mod utils {
@@ -38,7 +38,8 @@ pub mod utils {
         let ra_cross_axis = ra.cross(axis);
         let rb_cross_axis = rb.cross(axis);
 
-        let denominator = inv_mass_a + inv_mass_b
+        let denominator = inv_mass_a
+            + inv_mass_b
             + ra_cross_axis * ra_cross_axis * inv_inertia_a
             + rb_cross_axis * rb_cross_axis * inv_inertia_b;
 

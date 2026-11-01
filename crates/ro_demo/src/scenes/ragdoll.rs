@@ -5,9 +5,9 @@
 
 use std::fmt;
 
-use ro_physics::math::{Rot2, Transform, Vec2};
 use ro_physics::bodies::BodyHandle;
 use ro_physics::constraints::ConstraintHandle;
+use ro_physics::math::{Rot2, Transform, Vec2};
 use ro_physics::world::World;
 
 /// A ragdoll scene that demonstrates constraint system.
@@ -71,49 +71,58 @@ impl RagdollScene {
         self.dispose(world);
 
         // Create all body parts
-        
+
         // Torso (center of the ragdoll)
-        self.torso = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0),Rot2::new(0.0)));
+        self.torso =
+            world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0), Rot2::new(0.0)));
         let _ = world.add_box(self.torso, Vec2::new(0.4, 0.6), 10.0);
 
         // Head
-        self.head = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.8),Rot2::new(0.0)));
+        self.head = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.8), Rot2::new(0.0)));
         let _ = world.add_circle(self.head, 0.3, 10.0);
 
         // Left upper arm
-        self.left_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 9.5),Rot2::new(0.0)));
+        self.left_upper_arm =
+            world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 9.5), Rot2::new(0.0)));
         let _ = world.add_box(self.left_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Left lower arm
-        self.left_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 8.8),Rot2::new(0.0)));
+        self.left_lower_arm =
+            world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 8.8), Rot2::new(0.0)));
         let _ = world.add_box(self.left_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Right upper arm
-        self.right_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 9.5),Rot2::new(0.0)));
+        self.right_upper_arm =
+            world.create_dynamic_body(Transform::new(Vec2::new(0.5, 9.5), Rot2::new(0.0)));
         let _ = world.add_box(self.right_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Right lower arm
-        self.right_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 8.8),Rot2::new(0.0)));
+        self.right_lower_arm =
+            world.create_dynamic_body(Transform::new(Vec2::new(0.5, 8.8), Rot2::new(0.0)));
         let _ = world.add_box(self.right_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Left upper leg
-        self.left_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 9.0),Rot2::new(0.0)));
+        self.left_upper_leg =
+            world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 9.0), Rot2::new(0.0)));
         let _ = world.add_box(self.left_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Left lower leg
-        self.left_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 8.2),Rot2::new(0.0)));
+        self.left_lower_leg =
+            world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 8.2), Rot2::new(0.0)));
         let _ = world.add_box(self.left_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Right upper leg
-        self.right_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 9.0),Rot2::new(0.0)));
+        self.right_upper_leg =
+            world.create_dynamic_body(Transform::new(Vec2::new(0.2, 9.0), Rot2::new(0.0)));
         let _ = world.add_box(self.right_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Right lower leg
-        self.right_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 8.2),Rot2::new(0.0)));
+        self.right_lower_leg =
+            world.create_dynamic_body(Transform::new(Vec2::new(0.2, 8.2), Rot2::new(0.0)));
         let _ = world.add_box(self.right_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Create constraints to connect the ragdoll
-        
+
         // Head to torso (revolute joint at neck)
         let neck_joint = world.create_revolute_joint(
             self.head,
@@ -376,9 +385,9 @@ mod tests {
     fn test_ragdoll_assemble() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         assert!(scene.is_assembled());
         assert_eq!(scene.body_count(), 10); // 10 body parts
         assert_eq!(scene.constraint_count(), 10); // 10 joints
@@ -390,12 +399,12 @@ mod tests {
     fn test_ragdoll_dispose() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
         assert!(scene.is_assembled());
-        
+
         scene.dispose(&mut world);
-        
+
         assert!(!scene.is_assembled());
         assert_eq!(scene.body_count(), 0);
         assert_eq!(scene.constraint_count(), 0);
@@ -407,16 +416,16 @@ mod tests {
     fn test_ragdoll_scene_trait() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         // Test Scene trait methods
         scene.init(&mut world);
         assert!(scene.is_assembled());
-        
+
         scene.update(&mut world, 1.0 / 60.0);
-        
+
         assert_eq!(scene.name(), "Ragdoll");
         assert!(scene.description().contains("ragdoll"));
-        
+
         scene.cleanup(&mut world);
         assert!(!scene.is_assembled());
     }
@@ -425,9 +434,9 @@ mod tests {
     fn test_ragdoll_display() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         let scene_str = format!("{}", scene);
         assert!(scene_str.contains("RagdollScene"));
         assert!(scene_str.contains("assembled: true"));
@@ -437,12 +446,12 @@ mod tests {
     fn test_ragdoll_body_handles() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         let handles = scene.body_handles();
         assert_eq!(handles.len(), 10);
-        
+
         // All handles should be valid (not null)
         for handle in handles {
             assert!(!handle.is_null());
@@ -453,14 +462,14 @@ mod tests {
     fn test_ragdoll_apply_force() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         let torso = world.get_body(scene.torso).unwrap();
         let initial_force = torso.force();
-        
+
         scene.apply_torso_force(&mut world, Vec2::new(0.0, 100.0));
-        
+
         let torso_after = world.get_body(scene.torso).unwrap();
         assert_ne!(torso_after.force(), initial_force);
     }
@@ -469,14 +478,14 @@ mod tests {
     fn test_ragdoll_apply_impulse() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         let head = world.get_body(scene.head).unwrap();
         let initial_velocity = head.linear_velocity();
-        
+
         scene.apply_impulse(&mut world, scene.head, Vec2::new(10.0, 0.0));
-        
+
         let head_after = world.get_body(scene.head).unwrap();
         assert_ne!(head_after.linear_velocity(), initial_velocity);
     }
@@ -485,19 +494,19 @@ mod tests {
     fn test_ragdoll_simulation() {
         let mut world = World::default();
         let mut scene = RagdollScene::new();
-        
+
         scene.assemble(&mut world);
-        
+
         // Step the simulation
         for _ in 0..10 {
             scene.update(&mut world, 1.0 / 60.0);
             world.step(1.0 / 60.0);
         }
-        
+
         // All bodies should still exist
         assert_eq!(world.body_count(), 10);
         assert_eq!(world.constraint_count(), 10);
-        
+
         // Bodies should have moved (fallen due to gravity)
         let head = world.get_body(scene.head).unwrap();
         assert!(head.position().y < 10.8); // Started at y=10.8

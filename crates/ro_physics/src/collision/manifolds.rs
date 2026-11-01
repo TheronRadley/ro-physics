@@ -15,15 +15,18 @@
 use std::fmt;
 
 use crate::bodies::BodyHandle;
-use crate::math::Vec2;
 use crate::collision::ColliderHandle;
+use crate::math::Vec2;
 
 /// Maximum number of contact points per manifold
 const MAX_CONTACTS: usize = 4;
 
 /// A single contact point between two bodies.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Contact {
     /// World position of the contact point
     pub position: Vec2,
@@ -64,7 +67,12 @@ impl Contact {
     /// Create a contact without accumulated impulses
     #[inline]
     #[must_use]
-    pub fn without_impulses(position: Vec2, normal: Vec2, penetration: f32, contact_id: ContactId) -> Self {
+    pub fn without_impulses(
+        position: Vec2,
+        normal: Vec2,
+        penetration: f32,
+        contact_id: ContactId,
+    ) -> Self {
         Self::new(position, normal, penetration, 0.0, 0.0, contact_id)
     }
 
@@ -167,7 +175,10 @@ impl fmt::Display for Contact {
 /// whose ids match between frames are considered the same contact, which lets
 /// the solver seed them with last frame's impulses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ContactId {
     /// Feature index on body A
     pub feature_a: u32,
@@ -241,7 +252,10 @@ impl fmt::Display for ContactId {
 /// A manifold represents the collision information between two bodies,
 /// including all contact points, the collision normal, and accumulated impulses.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ContactManifold {
     /// Handle of body A
     body_a: BodyHandle,
@@ -310,7 +324,14 @@ impl ContactManifold {
         restitution: f32,
     ) -> Self {
         let mut manifold = Self::new();
-        manifold.add_contact(position, normal, penetration, 0.0, 0.0, ContactId::default());
+        manifold.add_contact(
+            position,
+            normal,
+            penetration,
+            0.0,
+            0.0,
+            ContactId::default(),
+        );
         manifold.friction = friction;
         manifold.restitution = restitution;
         manifold
@@ -563,9 +584,8 @@ impl ContactManifold {
 
                 if delta.length_squared() <= tolerance * tolerance {
                     merged_contact.position = (merged_contact.position + contact_j.position) / 2.0;
-                    merged_contact.penetration = merged_contact
-                        .penetration
-                        .max(contact_j.penetration);
+                    merged_contact.penetration =
+                        merged_contact.penetration.max(contact_j.penetration);
                     // Keep the largest accumulated impulse so warm starting
                     // does not lose energy when contacts collapse.
                     merged_contact.normal_impulse += contact_j.normal_impulse;
@@ -688,9 +708,23 @@ mod tests {
 
         let mut current = ContactManifold::new();
         // Matches the first previous contact
-        current.add_contact(Vec2::zero(), Vec2::unit_y(), 0.1, 0.0, 0.0, ContactId::new(0, 1));
+        current.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            0.0,
+            0.0,
+            ContactId::new(0, 1),
+        );
         // New contact without a previous counterpart
-        current.add_contact(Vec2::new(5.0, 0.0), Vec2::unit_y(), 0.1, 0.0, 0.0, ContactId::new(9, 9));
+        current.add_contact(
+            Vec2::new(5.0, 0.0),
+            Vec2::unit_y(),
+            0.1,
+            0.0,
+            0.0,
+            ContactId::new(9, 9),
+        );
 
         current.warm_start_from(&previous);
 
@@ -755,9 +789,30 @@ mod tests {
     #[test]
     fn test_merge_contacts() {
         let mut manifold = ContactManifold::new();
-        manifold.add_contact(Vec2::zero(), Vec2::unit_y(), 0.1, 1.0, 0.0, ContactId::new(0, 0));
-        manifold.add_contact(Vec2::new(0.001, 0.0), Vec2::unit_y(), 0.3, 2.0, 0.0, ContactId::new(1, 0));
-        manifold.add_contact(Vec2::new(10.0, 0.0), Vec2::unit_y(), 0.2, 0.0, 0.0, ContactId::new(2, 0));
+        manifold.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            1.0,
+            0.0,
+            ContactId::new(0, 0),
+        );
+        manifold.add_contact(
+            Vec2::new(0.001, 0.0),
+            Vec2::unit_y(),
+            0.3,
+            2.0,
+            0.0,
+            ContactId::new(1, 0),
+        );
+        manifold.add_contact(
+            Vec2::new(10.0, 0.0),
+            Vec2::unit_y(),
+            0.2,
+            0.0,
+            0.0,
+            ContactId::new(2, 0),
+        );
 
         manifold.merge_contacts(0.01);
 

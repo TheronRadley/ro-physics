@@ -129,43 +129,41 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::many_single_char_names)]
 
-pub mod math;
-pub mod geometry;
-pub mod shapes;
 pub mod bodies;
+pub mod ccd;
 pub mod collision;
 pub mod constraints;
-pub mod ccd;
+pub mod debug;
+pub mod geometry;
+pub mod integration;
+pub mod math;
+pub mod query;
+pub mod shapes;
+pub mod sleeping;
 pub mod solver;
 pub mod world;
-pub mod integration;
-pub mod sleeping;
-pub mod query;
-pub mod debug;
 
 #[cfg(feature = "serialization")]
 pub mod serialization;
 
 /// Re-exports for convenient access to commonly used types
 pub mod prelude {
-    pub use crate::math::{Rot2, Transform, Vec2};
-    pub use crate::geometry::{Aabb, Ray};
-    pub use crate::shapes::{Circle, Polygon, Shape};
     pub use crate::bodies::{Body, BodyHandle, BodyType};
-    pub use crate::collision::{
-        Collider, ColliderHandle, CollisionEvent, ContactManifold, Filter,
-    };
+    pub use crate::ccd::{CcdConfig, CcdResult, SweptCollisionDetector, TimeOfImpact, ToiResult};
+    pub use crate::collision::{Collider, ColliderHandle, CollisionEvent, ContactManifold, Filter};
     pub use crate::constraints::{
         Constraint, ConstraintHandle, DistanceJoint, MotorJoint, RevoluteJoint,
     };
-    pub use crate::ccd::{CcdConfig, CcdResult, SweptCollisionDetector, TimeOfImpact, ToiResult};
-    pub use crate::world::{World, WorldConfig};
+    pub use crate::geometry::{Aabb, Ray};
+    pub use crate::math::{Rot2, Transform, Vec2};
     pub use crate::query::{
         AabbQuery, AabbQueryResult, Bvh, PointQuery, PointQueryResult, RayCast, RayCastOptions,
         RayCastResult,
     };
+    pub use crate::shapes::{Circle, Polygon, Shape};
     pub use crate::sleeping::SleepingConfig;
     pub use crate::solver::SolverConfig;
+    pub use crate::world::{World, WorldConfig};
 }
 
 /// Numerical constants used throughout the engine

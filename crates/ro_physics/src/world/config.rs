@@ -9,7 +9,10 @@ use crate::solver::SolverConfig;
 
 /// Configuration for the physics world.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct WorldConfig {
     /// Gravity vector
     pub gravity: Vec2,

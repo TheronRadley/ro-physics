@@ -11,11 +11,11 @@
 //! polygon = B), so the normal points **from the circle towards the polygon**
 //! and the impulse pushes the circle along `-normal`, i.e. out of the polygon.
 
+use super::super::{ContactId, ContactManifold};
+use super::NarrowPhaseConfig;
 use crate::constants::EPSILON;
 use crate::math::{Transform, Vec2};
 use crate::shapes::{Circle, Polygon};
-use super::NarrowPhaseConfig;
-use super::super::{ContactId, ContactManifold};
 
 /// Detect collision between a circle (A) and a polygon (B).
 ///
@@ -307,7 +307,11 @@ mod tests {
 
         let contact = manifold.contact(0);
         // The circle must be pushed out through the nearest face (the top one)
-        assert!(approx_eq(contact.normal().y, -1.0), "normal was {}", contact.normal().y);
+        assert!(
+            approx_eq(contact.normal().y, -1.0),
+            "normal was {}",
+            contact.normal().y
+        );
         // Overlap = radius + depth = 0.5 + 0.75
         assert!(approx_eq(contact.penetration(), 1.25));
         // Contact point lies on the top face

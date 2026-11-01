@@ -9,7 +9,10 @@ use crate::collision::ColliderHandle;
 
 /// Type of collision event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum CollisionEventType {
     /// Collision started (bodies just touched)
     Started,
@@ -56,7 +59,10 @@ impl fmt::Display for CollisionEventType {
 ///
 /// Contains information about a collision between two bodies.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct CollisionEvent {
     /// Type of collision event
     pub event_type: CollisionEventType,
@@ -283,7 +289,7 @@ mod tests {
     #[test]
     fn test_simple_handler() {
         let mut handler = SimpleCollisionEventHandler::new();
-        
+
         let event = CollisionEvent::new(
             CollisionEventType::Started,
             BodyHandle::new(1, 0),
@@ -295,7 +301,7 @@ mod tests {
         );
 
         handler.on_collision(event);
-        
+
         let events = handler.events();
         assert_eq!(events.len(), 1);
         assert!(events[0].is_start());

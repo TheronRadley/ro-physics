@@ -11,7 +11,10 @@ use crate::math::Vec2;
 
 /// Ray cast structure
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct RayCast {
     /// The ray to cast
     pub ray: Ray,
@@ -27,7 +30,11 @@ impl RayCast {
         Self {
             ray,
             // `f32::max` is not `const` stable on the MSRV, so clamp by hand.
-            max_distance: if max_distance > 0.0 { max_distance } else { 0.0 },
+            max_distance: if max_distance > 0.0 {
+                max_distance
+            } else {
+                0.0
+            },
         }
     }
 
@@ -78,7 +85,10 @@ impl fmt::Display for RayCast {
 
 /// Ray cast result
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct RayCastResult {
     /// Handle to the body that was hit
     pub body_handle: BodyHandle,
@@ -184,7 +194,10 @@ impl fmt::Display for RayCastResult {
 
 /// Ray cast options
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct RayCastOptions {
     /// Whether to ignore sensor colliders
     pub ignore_sensors: bool,
@@ -284,11 +297,11 @@ mod tests {
     fn test_ray_cast_setters() {
         let ray = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
         let mut cast = RayCast::new(ray, 100.0);
-        
+
         let new_ray = Ray::new(Vec2::new(1.0, 2.0), Vec2::new(0.0, 1.0));
         cast.set_ray(new_ray);
         assert_eq!(cast.ray(), new_ray);
-        
+
         cast.set_max_distance(50.0);
         assert_eq!(cast.max_distance(), 50.0);
     }

@@ -20,7 +20,10 @@ use crate::math::{utils::approx_eq, Vec2};
 /// For performance-critical operations, sine and cosine are cached
 /// when computed.
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Rot2 {
     /// Angle in radians
     angle: f32,
@@ -121,10 +124,7 @@ impl Rot2 {
     #[must_use]
     pub fn rotate(self, vector: Vec2) -> Vec2 {
         let (s, c) = self.sin_cos();
-        Vec2::new(
-            vector.x * c - vector.y * s,
-            vector.x * s + vector.y * c,
-        )
+        Vec2::new(vector.x * c - vector.y * s, vector.x * s + vector.y * c)
     }
 
     /// Rotate a vector in place
@@ -248,7 +248,7 @@ impl fmt::Display for Rot2 {
 
 impl Mul for Rot2 {
     type Output = Self;
-    
+
     #[inline]
     fn mul(self, other: Self) -> Self::Output {
         self.compose(other)
@@ -264,7 +264,7 @@ impl MulAssign for Rot2 {
 
 impl Mul<Vec2> for Rot2 {
     type Output = Vec2;
-    
+
     #[inline]
     fn mul(self, vector: Vec2) -> Self::Output {
         self.rotate(vector)
@@ -307,7 +307,7 @@ impl std::ops::SubAssign for Rot2 {
 
 impl Neg for Rot2 {
     type Output = Self;
-    
+
     #[inline]
     fn neg(self) -> Self::Output {
         self.inverse()
@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn test_rotate() {
         let r = Rot2::new(PI_OVER_TWO);
-        
+
         let v1 = Vec2::new(1.0, 0.0);
         let rotated = r.rotate(v1);
         assert!(approx_eq_eps(rotated.x, 0.0, 1e-5));
@@ -385,7 +385,7 @@ mod tests {
     fn test_compose() {
         let r1 = Rot2::new(PI_OVER_TWO);
         let r2 = Rot2::new(PI_OVER_TWO);
-        
+
         let composed = r1.compose(r2);
         assert!(approx_eq_eps(composed.angle(), PI, 1e-5));
 
@@ -393,7 +393,7 @@ mod tests {
         let rotated1 = r1.rotate(v);
         let rotated2 = r2.rotate(rotated1);
         let rotated_composed = composed.rotate(v);
-        
+
         assert!(approx_eq_eps(rotated2.x, rotated_composed.x, 1e-5));
         assert!(approx_eq_eps(rotated2.y, rotated_composed.y, 1e-5));
     }
@@ -426,7 +426,7 @@ mod tests {
     fn test_lerp() {
         let r1 = Rot2::new(0.0);
         let r2 = Rot2::new(PI);
-        
+
         let mid = r1.lerp(r2, 0.5);
         assert!(approx_eq_eps(mid.angle(), PI_OVER_TWO, 1e-5));
 
@@ -507,7 +507,7 @@ mod tests {
     fn test_identity_rotation() {
         let r = Rot2::identity();
         assert!(r.is_identity());
-        
+
         let v = Vec2::new(1.0, 2.0);
         let rotated = r.rotate(v);
         assert_eq!(rotated, v);
@@ -517,7 +517,7 @@ mod tests {
     fn test_rotation_operators() {
         let mut r = Rot2::identity();
         let other = Rot2::new(PI_OVER_TWO);
-        
+
         r *= other;
         assert!(approx_eq(r.angle(), PI_OVER_TWO));
     }

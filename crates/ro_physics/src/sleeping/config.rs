@@ -4,7 +4,10 @@
 
 /// Configuration for the sleeping system.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct SleepingConfig {
     /// Linear velocity threshold for sleeping
     pub linear_threshold: f32,
@@ -106,5 +109,4 @@ mod tests {
     fn approx_eq(a: f32, b: f32) -> bool {
         (a - b).abs() <= crate::constants::EPSILON
     }
-
 }

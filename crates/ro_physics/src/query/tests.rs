@@ -8,7 +8,6 @@ use crate::math::utils::approx_eq;
 use crate::math::{Rot2, Transform, Vec2};
 use crate::world::World;
 
-
 // ========== BVH Tests ==========
 
 #[test]
@@ -45,9 +44,7 @@ fn test_bvh_build_multiple_colliders() {
     let handles: Vec<ColliderHandle> = (0..4)
         .map(|i| ColliderHandle::new(i as u64 + 1, 0))
         .collect();
-    let body_handles: Vec<BodyHandle> = (0..4)
-        .map(|i| BodyHandle::new(i as u64 + 1, 0))
-        .collect();
+    let body_handles: Vec<BodyHandle> = (0..4).map(|i| BodyHandle::new(i as u64 + 1, 0)).collect();
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -64,14 +61,8 @@ fn test_bvh_point_query_single_hit() {
         Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
     ];
 
-    let handles = vec![
-        ColliderHandle::new(1, 0),
-        ColliderHandle::new(2, 0),
-    ];
-    let body_handles = vec![
-        BodyHandle::new(1, 0),
-        BodyHandle::new(2, 0),
-    ];
+    let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
+    let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -100,9 +91,7 @@ fn test_bvh_point_query_multiple_hits() {
     let handles: Vec<ColliderHandle> = (0..3)
         .map(|i| ColliderHandle::new(i as u64 + 1, 0))
         .collect();
-    let body_handles: Vec<BodyHandle> = (0..3)
-        .map(|i| BodyHandle::new(i as u64 + 1, 0))
-        .collect();
+    let body_handles: Vec<BodyHandle> = (0..3).map(|i| BodyHandle::new(i as u64 + 1, 0)).collect();
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -114,9 +103,7 @@ fn test_bvh_point_query_multiple_hits() {
 
 #[test]
 fn test_bvh_point_query_no_hit() {
-    let aabbs = vec![
-        Aabb::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0)),
-    ];
+    let aabbs = vec![Aabb::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0))];
 
     let handles = vec![ColliderHandle::new(1, 0)];
     let body_handles = vec![BodyHandle::new(1, 0)];
@@ -136,14 +123,8 @@ fn test_bvh_aabb_query_single_overlap() {
         Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
     ];
 
-    let handles = vec![
-        ColliderHandle::new(1, 0),
-        ColliderHandle::new(2, 0),
-    ];
-    let body_handles = vec![
-        BodyHandle::new(1, 0),
-        BodyHandle::new(2, 0),
-    ];
+    let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
+    let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -167,9 +148,7 @@ fn test_bvh_aabb_query_multiple_overlaps() {
     let handles: Vec<ColliderHandle> = (0..3)
         .map(|i| ColliderHandle::new(i as u64 + 1, 0))
         .collect();
-    let body_handles: Vec<BodyHandle> = (0..3)
-        .map(|i| BodyHandle::new(i as u64 + 1, 0))
-        .collect();
+    let body_handles: Vec<BodyHandle> = (0..3).map(|i| BodyHandle::new(i as u64 + 1, 0)).collect();
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -182,9 +161,7 @@ fn test_bvh_aabb_query_multiple_overlaps() {
 
 #[test]
 fn test_bvh_aabb_query_no_overlap() {
-    let aabbs = vec![
-        Aabb::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0)),
-    ];
+    let aabbs = vec![Aabb::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0))];
 
     let handles = vec![ColliderHandle::new(1, 0)];
     let body_handles = vec![BodyHandle::new(1, 0)];
@@ -205,14 +182,8 @@ fn test_bvh_ray_cast_simple() {
         Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
     ];
 
-    let handles = vec![
-        ColliderHandle::new(1, 0),
-        ColliderHandle::new(2, 0),
-    ];
-    let body_handles = vec![
-        BodyHandle::new(1, 0),
-        BodyHandle::new(2, 0),
-    ];
+    let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
+    let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs, handles, body_handles);
@@ -246,14 +217,8 @@ fn test_bvh_update_and_rebuild() {
         Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
     ];
 
-    let handles = vec![
-        ColliderHandle::new(1, 0),
-        ColliderHandle::new(2, 0),
-    ];
-    let body_handles = vec![
-        BodyHandle::new(1, 0),
-        BodyHandle::new(2, 0),
-    ];
+    let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
+    let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
     let mut bvh = Bvh::new();
     bvh.build(aabbs.clone(), handles.clone(), body_handles.clone());
@@ -547,7 +512,10 @@ fn test_aabb_query_polygon() {
         Vec2::new(1.0, 1.0),
         Vec2::new(-1.0, 1.0),
     ];
-    let body = world.create_static_body(Transform::new(Vec2::zero(), Rot2::new(std::f32::consts::PI / 4.0)));
+    let body = world.create_static_body(Transform::new(
+        Vec2::zero(),
+        Rot2::new(std::f32::consts::PI / 4.0),
+    ));
     let _ = world.add_polygon(body, vertices, 1.0);
 
     // Query AABB that overlaps
@@ -589,12 +557,7 @@ fn test_ray_cast_options_builder() {
 
 #[test]
 fn test_point_query_result() {
-    let result = PointQueryResult::new(
-        BodyHandle::new(1, 0),
-        ColliderHandle::new(1, 0),
-        true,
-        0.0,
-    );
+    let result = PointQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0), true, 0.0);
 
     assert_eq!(result.body_handle, BodyHandle::new(1, 0));
     assert_eq!(result.collider_handle, ColliderHandle::new(1, 0));
@@ -603,10 +566,7 @@ fn test_point_query_result() {
 
 #[test]
 fn test_aabb_query_result() {
-    let result = AabbQueryResult::new(
-        BodyHandle::new(1, 0),
-        ColliderHandle::new(1, 0),
-    );
+    let result = AabbQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0));
 
     assert_eq!(result.body_handle, BodyHandle::new(1, 0));
     assert_eq!(result.collider_handle, ColliderHandle::new(1, 0));
@@ -628,4 +588,3 @@ fn test_ray_cast_result() {
     assert_eq!(result.distance, 5.0);
     assert_eq!(result.fraction, 0.5);
 }
-

@@ -3,11 +3,11 @@
 //! This module provides swept collision detection for preventing tunneling
 //! in fast-moving objects.
 
+use super::{CcdConfig, TimeOfImpact, ToiResult};
 use crate::bodies::Body;
 use crate::collision::Collider;
 use crate::math::{Transform, Vec2};
 use crate::shapes::Shape;
-use super::{TimeOfImpact, ToiResult, CcdConfig};
 
 /// Swept collision detector.
 ///
@@ -76,8 +76,14 @@ impl SweptCollisionDetector {
         let angular_velocity_b = body_b.angular_velocity();
 
         let toi = self.calculate_toi(
-            shape_a, transform_a, velocity_a, angular_velocity_a,
-            shape_b, transform_b, velocity_b, angular_velocity_b,
+            shape_a,
+            transform_a,
+            velocity_a,
+            angular_velocity_a,
+            shape_b,
+            transform_b,
+            velocity_b,
+            angular_velocity_b,
         );
 
         if toi.is_colliding() && toi.toi < 1.0 {
@@ -101,46 +107,40 @@ impl SweptCollisionDetector {
         angular_velocity_b: f32,
     ) -> ToiResult {
         match (shape_a, shape_b) {
-            (Shape::Circle(circle_a), Shape::Circle(circle_b)) => {
-                TimeOfImpact::circle_circle(
-                    circle_a,
-                    transform_a.position,
-                    velocity_a,
-                    circle_b,
-                    transform_b.position,
-                    velocity_b,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
-            (Shape::Circle(circle_a), Shape::Polygon(polygon_b)) => {
-                TimeOfImpact::circle_polygon(
-                    circle_a,
-                    transform_a.position,
-                    velocity_a,
-                    polygon_b,
-                    transform_b.position,
-                    velocity_b,
-                    transform_b.rotation.angle(),
-                    angular_velocity_b,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
-            (Shape::Polygon(polygon_a), Shape::Circle(circle_b)) => {
-                TimeOfImpact::circle_polygon(
-                    circle_b,
-                    transform_b.position,
-                    velocity_b,
-                    polygon_a,
-                    transform_a.position,
-                    velocity_a,
-                    transform_a.rotation.angle(),
-                    angular_velocity_a,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
+            (Shape::Circle(circle_a), Shape::Circle(circle_b)) => TimeOfImpact::circle_circle(
+                circle_a,
+                transform_a.position,
+                velocity_a,
+                circle_b,
+                transform_b.position,
+                velocity_b,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
+            (Shape::Circle(circle_a), Shape::Polygon(polygon_b)) => TimeOfImpact::circle_polygon(
+                circle_a,
+                transform_a.position,
+                velocity_a,
+                polygon_b,
+                transform_b.position,
+                velocity_b,
+                transform_b.rotation.angle(),
+                angular_velocity_b,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
+            (Shape::Polygon(polygon_a), Shape::Circle(circle_b)) => TimeOfImpact::circle_polygon(
+                circle_b,
+                transform_b.position,
+                velocity_b,
+                polygon_a,
+                transform_a.position,
+                velocity_a,
+                transform_a.rotation.angle(),
+                angular_velocity_a,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
             (Shape::Polygon(polygon_a), Shape::Polygon(polygon_b)) => {
                 TimeOfImpact::polygon_polygon(
                     polygon_a,
@@ -203,7 +203,10 @@ impl Default for SweptCollisionDetector {
 
 /// CCD result containing TOI information.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct CcdResult {
     /// Whether CCD was performed
     pub ccd_performed: bool,
@@ -273,7 +276,7 @@ mod tests {
         let detector = SweptCollisionDetector::new(
             CcdConfig::new()
                 .with_enabled(true)
-                .with_max_toi_iterations(20)
+                .with_max_toi_iterations(20),
         );
 
         let handle_a = BodyHandle::new(1, 0);
@@ -292,7 +295,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_some());
         let toi_result = result.unwrap();
@@ -321,7 +325,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_none());
     }
@@ -345,7 +350,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let will_tunnel =
+            detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(will_tunnel);
     }
@@ -364,9 +370,7 @@ mod tests {
 
     #[test]
     fn test_ccd_disabled() {
-        let detector = SweptCollisionDetector::new(
-            CcdConfig::new().with_enabled(false)
-        );
+        let detector = SweptCollisionDetector::new(CcdConfig::new().with_enabled(false));
 
         let handle_a = BodyHandle::new(1, 0);
         let body_a = Body::new_dynamic(handle_a);
@@ -380,7 +384,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_none());
     }

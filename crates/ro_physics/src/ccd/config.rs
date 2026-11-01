@@ -4,7 +4,10 @@
 
 /// Configuration for continuous collision detection.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct CcdConfig {
     /// Whether CCD is enabled
     pub enabled: bool,
@@ -120,5 +123,4 @@ mod tests {
     fn approx_eq(a: f32, b: f32) -> bool {
         (a - b).abs() <= crate::constants::EPSILON
     }
-
 }

@@ -5,13 +5,16 @@
 
 use std::fmt;
 
-use crate::math::{Transform, Vec2};
 use crate::geometry::Aabb;
+use crate::math::{Transform, Vec2};
 use crate::shapes::{Circle, MassProperties, Polygon};
 
 /// Type of shape
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum ShapeType {
     /// Circle shape
     Circle,
@@ -30,7 +33,10 @@ impl fmt::Display for ShapeType {
 
 /// Enum representing any shape type
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum Shape {
     /// Circle shape variant
     Circle(Circle),
@@ -533,5 +539,4 @@ mod tests {
     fn approx_eq(a: f32, b: f32) -> bool {
         (a - b).abs() <= 1e-6
     }
-
 }

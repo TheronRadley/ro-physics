@@ -5,8 +5,8 @@
 
 use std::fmt;
 
-use crate::math::{Rot2, Transform, Vec2};
 use super::{BodyHandle, BodyType};
+use crate::math::{Rot2, Transform, Vec2};
 
 /// A rigid body in the physics simulation.
 ///
@@ -18,7 +18,10 @@ use super::{BodyHandle, BodyType};
 /// - **Static**: Fixed in place, infinite mass, does not move
 /// - **Dynamic**: Affected by forces and collisions, normal physics behavior
 /// - **Kinematic**: Moves according to velocity but not affected by forces
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Body {
     /// Handle to this body
     handle: BodyHandle,
@@ -541,7 +544,7 @@ impl Body {
         if !self.torque.is_finite() {
             return false;
         }
-        
+
         match self.body_type {
             BodyType::Static => true,
             BodyType::Dynamic | BodyType::Kinematic => {
@@ -690,7 +693,7 @@ mod tests {
     #[test]
     fn test_construction() {
         let handle = BodyHandle::new(1, 0);
-        
+
         let static_body = Body::new_static(handle);
         assert!(static_body.is_static());
         assert_eq!(static_body.handle(), handle);
@@ -714,7 +717,10 @@ mod tests {
         assert_eq!(body.position(), Vec2::new(10.0, 20.0));
 
         body.set_rotation(Rot2::new(crate::constants::PI_OVER_TWO));
-        assert!(approx_eq(body.rotation().angle(), crate::constants::PI_OVER_TWO));
+        assert!(approx_eq(
+            body.rotation().angle(),
+            crate::constants::PI_OVER_TWO
+        ));
 
         body.set_transform(Transform::new(Vec2::new(5.0, 5.0), Rot2::identity()));
         assert_eq!(body.position(), Vec2::new(5.0, 5.0));

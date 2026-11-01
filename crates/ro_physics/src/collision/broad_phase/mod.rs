@@ -358,7 +358,10 @@ mod tests {
     use super::*;
 
     fn box_aabb(min_x: f32, min_y: f32, size: f32) -> Aabb {
-        Aabb::new(Vec2::new(min_x, min_y), Vec2::new(min_x + size, min_y + size))
+        Aabb::new(
+            Vec2::new(min_x, min_y),
+            Vec2::new(min_x + size, min_y + size),
+        )
     }
 
     #[test]
@@ -594,7 +597,11 @@ mod tests {
         }
 
         assert!(bp.validate());
-        assert!(bp.stats().tree_height < 24, "height {}", bp.stats().tree_height);
+        assert!(
+            bp.stats().tree_height < 24,
+            "height {}",
+            bp.stats().tree_height
+        );
 
         for index in (0..300u64).step_by(3) {
             bp.remove_collider(ColliderHandle::new(index + 1, 0));

@@ -7,8 +7,8 @@ use std::fmt;
 use std::ops::{Mul, MulAssign};
 
 use crate::constants::EPSILON;
+use crate::math::Rot2;
 use crate::math::{utils::approx_eq, Vec2};
-use crate::math::{Rot2};
 
 /// A 2D transform representing position and rotation.
 ///
@@ -16,7 +16,10 @@ use crate::math::{Rot2};
 /// in the physics simulation. It supports composition, inversion, and
 /// transformation of points and vectors.
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Transform {
     /// Position (translation)
     pub position: Vec2,
@@ -210,10 +213,7 @@ impl Transform {
     #[must_use]
     pub fn to_matrix(self) -> [f32; 6] {
         let (s, c) = self.rotation.sin_cos();
-        [
-            c, -s, self.position.x,
-            s,  c, self.position.y,
-        ]
+        [c, -s, self.position.x, s, c, self.position.y]
     }
 
     /// Create a transform from an affine transformation matrix
@@ -234,7 +234,7 @@ impl Transform {
         // Calculate angle from the rotation matrix
         // atan2(sin, cos) = atan2(c, a)
         let angle = c.atan2(a);
-        
+
         Self {
             position: Vec2::new(matrix[2], matrix[5]),
             rotation: Rot2::new(angle),
@@ -260,7 +260,7 @@ impl fmt::Display for Transform {
 
 impl Mul for Transform {
     type Output = Self;
-    
+
     #[inline]
     fn mul(self, other: Self) -> Self::Output {
         self.compose(other)
@@ -276,7 +276,7 @@ impl MulAssign for Transform {
 
 impl Mul<Vec2> for Transform {
     type Output = Vec2;
-    
+
     #[inline]
     fn mul(self, point: Vec2) -> Self::Output {
         self.transform_point(point)
@@ -378,7 +378,7 @@ mod tests {
     fn test_compose() {
         let t1 = Transform::from_translation(Vec2::new(1.0, 0.0));
         let t2 = Transform::from_translation(Vec2::new(0.0, 2.0));
-        
+
         let composed = t1.compose(t2);
         let p = Vec2::new(0.0, 0.0);
         let transformed = composed.transform_point(p);
@@ -388,7 +388,7 @@ mod tests {
         let t3 = Transform::from_rotation(Rot2::new(PI_OVER_TWO));
         let t4 = Transform::from_translation(Vec2::new(1.0, 0.0));
         let composed2 = t3.compose(t4);
-        
+
         let p2 = Vec2::new(1.0, 0.0);
         let transformed2 = composed2.transform_point(p2);
         // First translate (1,0) by (1,0) -> (2,0), then rotate by 90 -> (0,2)
@@ -400,7 +400,7 @@ mod tests {
     fn test_lerp() {
         let t1 = Transform::identity();
         let t2 = Transform::new(Vec2::new(10.0, 10.0), Rot2::new(PI));
-        
+
         let mid = t1.lerp(t2, 0.5);
         assert_eq!(mid.position, Vec2::new(5.0, 5.0));
         assert!(approx_eq_eps(mid.rotation.angle(), PI / 2.0, 1e-5));
@@ -410,7 +410,7 @@ mod tests {
     fn test_relative_to() {
         let t1 = Transform::from_translation(Vec2::new(1.0, 2.0));
         let t2 = Transform::from_translation(Vec2::new(4.0, 6.0));
-        
+
         let relative = t1.relative_to(t2);
         assert_eq!(relative.position, Vec2::new(3.0, 4.0));
         assert!(relative.rotation.is_identity());
@@ -420,7 +420,7 @@ mod tests {
     fn test_distance_to() {
         let t1 = Transform::from_translation(Vec2::new(0.0, 0.0));
         let t2 = Transform::from_translation(Vec2::new(3.0, 4.0));
-        
+
         assert!(approx_eq(t1.distance_to(t2), 5.0));
     }
 
@@ -444,7 +444,7 @@ mod tests {
     fn test_matrix_conversion() {
         let t = Transform::new(Vec2::new(1.0, 2.0), Rot2::new(PI_OVER_TWO));
         let matrix = t.to_matrix();
-        
+
         // Matrix should be:
         // [0 -1 1]
         // [1  0 2]
@@ -496,10 +496,10 @@ mod tests {
     fn test_inverse_transform() {
         let t = Transform::new(Vec2::new(1.0, 2.0), Rot2::new(PI_OVER_TWO));
         let p = Vec2::new(3.0, 4.0);
-        
+
         let transformed = t.transform_point(p);
         let back = t.inverse_transform_point(transformed);
-        
+
         assert!(approx_eq_eps(back.x, p.x, 1e-5));
         assert!(approx_eq_eps(back.y, p.y, 1e-5));
     }
@@ -508,7 +508,7 @@ mod tests {
     fn test_assign_operators() {
         let mut t1 = Transform::from_translation(Vec2::new(1.0, 0.0));
         let t2 = Transform::from_translation(Vec2::new(0.0, 2.0));
-        
+
         t1 *= t2;
         let p = Vec2::new(0.0, 0.0);
         let transformed = t1.transform_point(p);

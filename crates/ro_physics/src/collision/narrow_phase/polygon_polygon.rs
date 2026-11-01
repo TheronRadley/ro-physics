@@ -16,10 +16,10 @@
 //! The resulting manifold is expressed for the pair (A, B): the normal always
 //! points from A to B.
 
+use super::super::{ContactId, ContactManifold};
+use super::NarrowPhaseConfig;
 use crate::math::{Transform, Vec2};
 use crate::shapes::Polygon;
-use super::NarrowPhaseConfig;
-use super::super::{ContactId, ContactManifold};
 
 /// Relative tolerance used when deciding which polygon provides the reference
 /// face. It biases the choice towards polygon A so that the reference face does
@@ -65,12 +65,32 @@ pub fn polygon_polygon_collision(
 
     // Choose the reference polygon: the one whose best face is "most
     // separating", with a bias towards A for stability.
-    let (flipped, reference_vertices, reference_normals, incident_vertices, incident_normals, reference_face) =
-        if separation_b > RELATIVE_TOLERANCE * separation_a + ABSOLUTE_TOLERANCE {
-            (true, &vertices_b, &normals_b, &vertices_a, &normals_a, face_b)
-        } else {
-            (false, &vertices_a, &normals_a, &vertices_b, &normals_b, face_a)
-        };
+    let (
+        flipped,
+        reference_vertices,
+        reference_normals,
+        incident_vertices,
+        incident_normals,
+        reference_face,
+    ) = if separation_b > RELATIVE_TOLERANCE * separation_a + ABSOLUTE_TOLERANCE {
+        (
+            true,
+            &vertices_b,
+            &normals_b,
+            &vertices_a,
+            &normals_a,
+            face_b,
+        )
+    } else {
+        (
+            false,
+            &vertices_a,
+            &normals_a,
+            &vertices_b,
+            &normals_b,
+            face_a,
+        )
+    };
 
     let reference_count = reference_vertices.len();
     let v1 = reference_vertices[reference_face];

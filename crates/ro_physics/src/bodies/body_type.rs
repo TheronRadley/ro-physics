@@ -12,7 +12,10 @@ use std::fmt;
 /// - **Dynamic**: Affected by forces and collisions, normal physics behavior
 /// - **Kinematic**: Moves according to velocity but not affected by forces
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum BodyType {
     /// Static body - fixed in place, infinite mass
     Static,

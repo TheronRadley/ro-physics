@@ -4,14 +4,14 @@
 //! and physics simulation.
 
 mod circle;
+mod mass_properties;
 mod polygon;
 mod shape;
-mod mass_properties;
 
 pub use circle::Circle;
+pub use mass_properties::MassProperties;
 pub use polygon::Polygon;
 pub use shape::{Shape, ShapeType};
-pub use mass_properties::MassProperties;
 
 use std::fmt;
 
@@ -52,7 +52,10 @@ impl fmt::Display for ShapeError {
                 write!(f, "vertex {index} is not finite")
             }
             Self::OutOfRangeVertex { index } => {
-                write!(f, "vertex {index} is outside the supported coordinate range")
+                write!(
+                    f,
+                    "vertex {index} is outside the supported coordinate range"
+                )
             }
             Self::Degenerate => write!(f, "polygon is degenerate (zero area)"),
             Self::Concave => write!(f, "polygon is not convex"),
@@ -274,9 +277,7 @@ pub mod utils {
             let outgoing_length_sq = outgoing.length_squared();
 
             // Drop coincident vertices
-            if incoming_length_sq <= EPSILON * EPSILON
-                || outgoing_length_sq <= EPSILON * EPSILON
-            {
+            if incoming_length_sq <= EPSILON * EPSILON || outgoing_length_sq <= EPSILON * EPSILON {
                 continue;
             }
 

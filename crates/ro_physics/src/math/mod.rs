@@ -4,13 +4,13 @@
 //! throughout the physics simulation, including 2D vectors, rotations,
 //! and transforms.
 
-mod vec2;
 mod rot2;
 mod transform;
+mod vec2;
 
-pub use vec2::Vec2;
 pub use rot2::Rot2;
 pub use transform::Transform;
+pub use vec2::Vec2;
 
 /// Mathematical utilities and helper functions
 pub mod utils {
@@ -78,10 +78,7 @@ pub mod utils {
     #[inline]
     #[must_use]
     pub fn vec2_lerp(a: Vec2, b: Vec2, t: f32) -> Vec2 {
-        Vec2::new(
-            lerp(a.x, b.x, t),
-            lerp(a.y, b.y, t),
-        )
+        Vec2::new(lerp(a.x, b.x, t), lerp(a.y, b.y, t))
     }
 
     /// Calculate the sign of a value

@@ -4,18 +4,20 @@
 //! for rigid bodies.
 
 mod broad_phase;
-mod narrow_phase;
-mod manifolds;
 mod collider;
-mod filter;
 mod collision_event;
+mod filter;
+mod manifolds;
+mod narrow_phase;
 
 pub use broad_phase::{BroadPhase, BroadPhaseConfig};
-pub use narrow_phase::{NarrowPhase, NarrowPhaseConfig};
-pub use manifolds::{ContactManifold, Contact, ContactId};
 pub use collider::{Collider, ColliderHandle, ColliderHandleGenerator};
+pub use collision_event::{
+    CollisionEvent, CollisionEventHandler, CollisionEventType, SimpleCollisionEventHandler,
+};
 pub use filter::{categories, Filter};
-pub use collision_event::{CollisionEvent, CollisionEventHandler, CollisionEventType, SimpleCollisionEventHandler};
+pub use manifolds::{Contact, ContactId, ContactManifold};
+pub use narrow_phase::{NarrowPhase, NarrowPhaseConfig};
 
 /// Collision utilities
 pub mod utils {
@@ -43,10 +45,10 @@ pub mod utils {
     ) -> Vec2 {
         let r1 = contact_point - position1;
         let r2 = contact_point - position2;
-        
+
         let v1 = velocity1 + Vec2::new(-angular1 * r1.y, angular1 * r1.x);
         let v2 = velocity2 + Vec2::new(-angular2 * r2.y, angular2 * r2.x);
-        
+
         v1 - v2
     }
 
@@ -64,8 +66,12 @@ pub mod utils {
         normal: Vec2,
     ) -> f32 {
         let rel_vel = relative_velocity(
-            velocity1, angular1, position1,
-            velocity2, angular2, position2,
+            velocity1,
+            angular1,
+            position1,
+            velocity2,
+            angular2,
+            position2,
             contact_point,
         );
         rel_vel.dot(normal)
@@ -74,13 +80,17 @@ pub mod utils {
     /// Check if two AABBs are separated along an axis
     #[inline]
     #[must_use]
-    pub fn aabb_separated(aabb1: &crate::geometry::Aabb, aabb2: &crate::geometry::Aabb, axis: Vec2) -> bool {
+    pub fn aabb_separated(
+        aabb1: &crate::geometry::Aabb,
+        aabb2: &crate::geometry::Aabb,
+        axis: Vec2,
+    ) -> bool {
         let axis_normalized = axis.normalize();
-        
+
         // Project both AABBs onto the axis
         let (min1, max1) = project_aabb(aabb1, axis_normalized);
         let (min2, max2) = project_aabb(aabb2, axis_normalized);
-        
+
         // Check for separation
         max1 < min2 || max2 < min1
     }
@@ -96,17 +106,17 @@ pub mod utils {
             Vec2::new(aabb.max.x, aabb.max.y),
             Vec2::new(aabb.min.x, aabb.max.y),
         ];
-        
+
         // Project each corner and find min/max
         let mut min = f32::INFINITY;
         let mut max = f32::NEG_INFINITY;
-        
+
         for corner in corners {
             let proj = corner.dot(axis);
             min = min.min(proj);
             max = max.max(proj);
         }
-        
+
         (min, max)
     }
 }
