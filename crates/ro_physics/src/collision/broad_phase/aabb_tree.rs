@@ -721,7 +721,8 @@ mod tests {
         }
 
         assert!(tree.validate());
-        assert_eq!(tree.node_count(), 100);
+        // 100 leaves plus the 99 internal nodes of a full binary tree
+        assert_eq!(tree.node_count(), 199);
     }
 
     #[test]

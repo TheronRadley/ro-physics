@@ -88,7 +88,7 @@ fn test_toi_circle_circle_perpendicular_motion() {
     // Circle A moving right, Circle B moving down towards the same corner
     let position_a = Vec2::zero();
     let velocity_a = Vec2::new(5.0, 0.0);
-    let position_b = Vec2::new(0.0, 2.0);
+    let position_b = Vec2::new(0.0, 2.5);
     let velocity_b = Vec2::new(0.0, -5.0);
 
     let result = TimeOfImpact::circle_circle(

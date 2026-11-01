@@ -1827,10 +1827,17 @@ mod tests {
         let mut world = World::with_gravity(Vec2::zero());
 
         let a = world.create_dynamic_body(Transform::from_translation(Vec2::new(-2.0, 0.0)));
-        world.add_box(a, Vec2::splat(0.5), 1.0);
-
+        let collider_a = world.add_box(a, Vec2::splat(0.5), 1.0);
         let b = world.create_dynamic_body(Transform::from_translation(Vec2::new(2.0, 0.0)));
-        world.add_box(b, Vec2::splat(0.5), 1.0);
+        let collider_b = world.add_box(b, Vec2::splat(0.5), 1.0);
+
+        // No bounce: the boxes stay in contact once they meet
+        for collider in [collider_a, collider_b] {
+            world
+                .get_collider_mut(collider)
+                .expect("collider")
+                .set_restitution(0.0);
+        }
 
         // Far apart: no contacts
         world.step(1.0 / 60.0);
@@ -1954,6 +1961,35 @@ mod tests {
         let body = world.get_body(body).expect("body");
         assert!(body.is_sleeping(), "a body at rest should fall asleep");
         assert_eq!(body.linear_velocity(), Vec2::zero());
+    }
+
+    #[test]
+    fn debug_resting_body_diagnostics() {
+        let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
+
+        let ground = world.create_static_body(Transform::from_translation(Vec2::new(0.0, -1.0)));
+        world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
+
+        let body = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 0.0)));
+        world.add_box(body, Vec2::splat(0.5), 1.0);
+
+        let mut log = String::new();
+        for step in 0..600 {
+            world.step(1.0 / 60.0);
+
+            if step % 60 == 0 || step > 597 {
+                let b = world.get_body(body).expect("body");
+                log.push_str(&format!(
+                    "step {step}: pos {:?} vel {:?} sleeping {} timer {}\n",
+                    b.position(),
+                    b.linear_velocity(),
+                    b.is_sleeping(),
+                    b.sleep_timer()
+                ));
+            }
+        }
+
+        panic!("{log}");
     }
 
     #[test]

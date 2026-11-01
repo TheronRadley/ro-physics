@@ -256,7 +256,7 @@ fn bench_collision(c: &mut Criterion) {
             let pos_a = Vec2::new(0.0, 0.0);
             let pos_b = Vec2::new(1.5, 0.0);
             let shape_a = Shape::Circle(circle);
-            let shape_b = Shape::Polygon(polygon);
+            let shape_b = Shape::Polygon(polygon.clone());
             
             let collider_a = Collider::new(
                 ColliderHandle::new(1, 0),
@@ -299,8 +299,8 @@ fn bench_collision(c: &mut Criterion) {
         b.iter(|| {
             let pos_a = Vec2::new(0.0, 0.0);
             let pos_b = Vec2::new(1.5, 0.0);
-            let shape_a = Shape::Polygon(polygon_a);
-            let shape_b = Shape::Polygon(polygon_b);
+            let shape_a = Shape::Polygon(polygon_a.clone());
+            let shape_b = Shape::Polygon(polygon_b.clone());
             
             let collider_a = Collider::new(
                 ColliderHandle::new(1, 0),

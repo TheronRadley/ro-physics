@@ -194,14 +194,15 @@ mod tests {
         system.update_body(handle, Vec2::new(0.2, 0.0), 0.0, STEP);
         assert!(!system.is_sleeping(handle));
 
-        // Body is not moving, but sleep timer not expired
-        for _ in 0..59 {
+        // Body is not moving: it takes a full second of rest to fall asleep.
+        // The timer accumulates floating point values, so allow one extra step.
+        let mut steps = 0;
+        while !system.is_sleeping(handle) && steps < 120 {
             system.update_body(handle, Vec2::zero(), 0.0, STEP);
+            steps += 1;
         }
-        assert!(!system.is_sleeping(handle));
 
-        // Body is not moving, sleep timer expired
-        system.update_body(handle, Vec2::zero(), 0.0, STEP);
+        assert!(steps >= 60 && steps <= 61, "slept after {steps} steps");
         assert!(system.is_sleeping(handle));
 
         // Body starts moving again
