@@ -10,7 +10,7 @@ mod tests;
 
 pub use config::CcdConfig;
 pub use toi::{TimeOfImpact, ToiResult};
-pub use swept_collision::SweptCollisionDetector;
+pub use swept_collision::{CcdResult, SweptCollisionDetector};
 
 /// CCD utilities
 pub mod utils {

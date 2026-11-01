@@ -94,7 +94,7 @@ impl SweptCollisionDetector {
 
         match (shape_a, shape_b) {
             (Shape::Circle(circle_a), Shape::Circle(circle_b)) => {
-                toi.circle_circle(
+                TimeOfImpact::circle_circle(
                     circle_a,
                     transform_a.position,
                     velocity_a,
@@ -106,7 +106,7 @@ impl SweptCollisionDetector {
                 )
             }
             (Shape::Circle(circle_a), Shape::Polygon(polygon_b)) => {
-                toi.circle_polygon(
+                TimeOfImpact::circle_polygon(
                     circle_a,
                     transform_a.position,
                     velocity_a,
@@ -120,7 +120,7 @@ impl SweptCollisionDetector {
                 )
             }
             (Shape::Polygon(polygon_a), Shape::Circle(circle_b)) => {
-                toi.circle_polygon(
+                TimeOfImpact::circle_polygon(
                     circle_b,
                     transform_b.position,
                     velocity_b,
@@ -134,7 +134,7 @@ impl SweptCollisionDetector {
                 )
             }
             (Shape::Polygon(polygon_a), Shape::Polygon(polygon_b)) => {
-                toi.polygon_polygon(
+                TimeOfImpact::polygon_polygon(
                     polygon_a,
                     transform_a.position,
                     velocity_a,

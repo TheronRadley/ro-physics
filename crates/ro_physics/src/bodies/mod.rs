@@ -8,13 +8,13 @@ mod body_handle;
 mod body_type;
 
 pub use body::Body;
-pub use body_handle::BodyHandle;
+pub use body_handle::{BodyHandle, BodyHandleGenerator};
 pub use body_type::BodyType;
 
 /// Body utilities
 pub mod utils {
     use super::Body;
-    use crate::math::{Transform, Vec2};
+    use crate::math::Vec2;
 
     /// Calculate the center of mass for a system of bodies
     #[inline]

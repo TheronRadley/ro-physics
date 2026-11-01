@@ -367,6 +367,7 @@ impl fmt::Display for Collider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math::{Rot2, Transform, Vec2};
     use crate::shapes::Circle;
 
     #[test]
@@ -511,7 +512,7 @@ mod tests {
         assert!(collider.is_valid());
         assert!(collider.validate());
 
-        let mut invalid_collider = Collider::new(handle, body_handle, shape);
+        let mut invalid_collider = Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
         invalid_collider.set_friction(f32::NAN);
         assert!(!invalid_collider.is_valid());
         assert!(!invalid_collider.validate());

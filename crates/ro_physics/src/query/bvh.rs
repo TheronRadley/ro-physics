@@ -99,7 +99,7 @@ impl Bvh {
             let b_center = self.collider_aabbs[b].center();
             // `total_cmp` gives a total order for floats, so NaN can never
             // panic here the way `partial_cmp(..).unwrap()` would.
-            a_center[axis].total_cmp(&b_center[axis])
+            axis_value(a_center, axis).total_cmp(&axis_value(b_center, axis))
         });
     }
 
@@ -133,7 +133,7 @@ impl Bvh {
         // Calculate combined AABB
         let mut aabb = Aabb::invalid();
         for &idx in &sorted_indices {
-            aabb = aabb.combine(&self.collider_aabbs[idx]);
+            aabb = aabb.union(self.collider_aabbs[idx]);
         }
 
         // Build children
@@ -162,8 +162,8 @@ impl Bvh {
 
             for &idx in indices {
                 let center = self.collider_aabbs[idx].center();
-                min_val = min_val.min(center[axis]);
-                max_val = max_val.max(center[axis]);
+                min_val = min_val.min(axis_value(center, axis));
+                max_val = max_val.max(axis_value(center, axis));
             }
 
             let span = max_val - min_val;
@@ -402,6 +402,19 @@ impl fmt::Display for Bvh {
 /// Returns Some((t_min, t_max)) if there's an intersection, None otherwise
 #[inline]
 #[must_use]
+/// Read one component of a vector (0 -> x, anything else -> y)
+///
+/// `Vec2` does not implement `Index`, so spatial code has to go through this
+/// helper instead of indexing with a dynamic axis.
+#[inline]
+fn axis_value(v: Vec2, axis: usize) -> f32 {
+    if axis == 0 {
+        v.x
+    } else {
+        v.y
+    }
+}
+
 fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f32, f32)> {
     use crate::constants::EPSILON;
 
@@ -410,7 +423,7 @@ fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f
         if direction.y.abs() > EPSILON { 1.0 / direction.y } else { f32::INFINITY },
     );
 
-    let mut t_min = 0.0;
+    let mut t_min: f32 = 0.0;
     let mut t_max = f32::INFINITY;
 
     // X-axis

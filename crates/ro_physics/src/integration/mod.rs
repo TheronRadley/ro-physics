@@ -3,7 +3,7 @@
 //! This module provides various integration methods for rigid body simulation.
 
 use crate::bodies::Body;
-use crate::math::{Transform, Vec2};
+use crate::math::Vec2;
 
 /// Integration method trait
 pub trait Integrator: Send + Sync {
@@ -125,7 +125,7 @@ pub use utils::*;
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
-    use crate::math::utils::approx_eq;
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_semi_implicit_euler() {

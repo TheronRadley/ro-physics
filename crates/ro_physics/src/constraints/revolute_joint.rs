@@ -7,7 +7,7 @@ use std::fmt;
 
 use crate::bodies::Body;
 use crate::constants::{EPSILON, PI};
-use crate::math::{Rot2, Transform, Vec2};
+use crate::math::{Rot2, Vec2};
 use crate::bodies::BodyHandle;
 use super::{BaseConstraint, Constraint, ConstraintHandle};
 

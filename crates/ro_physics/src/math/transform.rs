@@ -15,8 +15,7 @@ use crate::math::{Rot2};
 /// This is the fundamental type for representing the state of rigid bodies
 /// in the physics simulation. It supports composition, inversion, and
 /// transformation of points and vectors.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Transform {
     /// Position (translation)
@@ -299,6 +298,7 @@ impl Eq for Transform {}
 mod tests {
     use super::*;
     use crate::constants::{PI, PI_OVER_TWO};
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {
@@ -364,7 +364,7 @@ mod tests {
 
         // Test that transform * inverse = identity
         let composed = t * inv;
-        assert!(composed.is_identity(1e-5));
+        assert!(composed.is_identity_eps(1e-5));
 
         // Test point transformation
         let p = Vec2::new(3.0, 4.0);

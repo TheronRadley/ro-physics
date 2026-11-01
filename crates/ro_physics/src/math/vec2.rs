@@ -14,8 +14,7 @@ use crate::math::utils::approx_eq;
 /// This is the fundamental building block for all geometric and physical
 /// calculations in the engine. It provides comprehensive vector operations
 /// optimized for physics simulation.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Vec2 {
     /// X component
@@ -525,6 +524,7 @@ impl Eq for Vec2 {}
 mod tests {
     use super::*;
     use crate::constants::EPSILON;
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {

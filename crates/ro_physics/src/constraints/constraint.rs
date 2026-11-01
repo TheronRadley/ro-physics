@@ -6,7 +6,7 @@
 use std::fmt;
 
 use crate::bodies::{Body, BodyHandle};
-use crate::math::{Rot2, Transform, Vec2};
+use crate::math::Vec2;
 use super::ConstraintHandle;
 
 /// A constraint that connects two bodies together.

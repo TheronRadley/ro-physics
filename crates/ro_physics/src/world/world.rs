@@ -694,10 +694,9 @@ impl World {
     #[must_use]
     pub fn get_constraint_mut(&mut self, handle: ConstraintHandle) -> Option<&mut dyn Constraint> {
         let index = *self.constraint_map.get(&handle)?;
-        self.constraints
-            .get_mut(index)?
-            .as_mut()
-            .map(|c| c.as_mut())
+        let constraint = self.constraints.get_mut(index)?.as_mut()?;
+
+        Some(&mut **constraint)
     }
 
     /// Check if a constraint exists

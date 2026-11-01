@@ -4,8 +4,9 @@ use super::*;
 use crate::bodies::BodyHandle;
 use crate::collision::ColliderHandle;
 use crate::geometry::Aabb;
-use crate::math::Rot2;
+use crate::math::{Rot2, Transform, Vec2};
 use crate::shapes::{Circle, Polygon, Shape};
+use crate::world::World;
 
 #[cfg(test)]
 mod tests {
@@ -45,10 +46,10 @@ mod tests {
         ];
 
         let handles: Vec<ColliderHandle> = (0..4)
-            .map(|i| ColliderHandle::new(i as u32 + 1, 0))
+            .map(|i| ColliderHandle::new(i as u64 + 1, 0))
             .collect();
         let body_handles: Vec<BodyHandle> = (0..4)
-            .map(|i| BodyHandle::new(i as u32 + 1, 0))
+            .map(|i| BodyHandle::new(i as u64 + 1, 0))
             .collect();
 
         let mut bvh = Bvh::new();
@@ -100,10 +101,10 @@ mod tests {
         ];
 
         let handles: Vec<ColliderHandle> = (0..3)
-            .map(|i| ColliderHandle::new(i as u32 + 1, 0))
+            .map(|i| ColliderHandle::new(i as u64 + 1, 0))
             .collect();
         let body_handles: Vec<BodyHandle> = (0..3)
-            .map(|i| BodyHandle::new(i as u32 + 1, 0))
+            .map(|i| BodyHandle::new(i as u64 + 1, 0))
             .collect();
 
         let mut bvh = Bvh::new();
@@ -167,10 +168,10 @@ mod tests {
         ];
 
         let handles: Vec<ColliderHandle> = (0..3)
-            .map(|i| ColliderHandle::new(i as u32 + 1, 0))
+            .map(|i| ColliderHandle::new(i as u64 + 1, 0))
             .collect();
         let body_handles: Vec<BodyHandle> = (0..3)
-            .map(|i| BodyHandle::new(i as u32 + 1, 0))
+            .map(|i| BodyHandle::new(i as u64 + 1, 0))
             .collect();
 
         let mut bvh = Bvh::new();
@@ -585,4 +586,57 @@ mod tests {
         assert!(options.ignore_kinematic);
         assert_eq!(options.mask, 0xFF);
     }
+}
+
+// Moved here from `query/mod.rs`, which cannot declare two `tests` modules.
+#[cfg(test)]
+mod result_tests {
+    use super::*;
+
+    use super::*;
+    use crate::bodies::BodyHandle;
+    use crate::collision::ColliderHandle;
+
+    #[test]
+    fn test_point_query_result() {
+        let result = PointQueryResult::new(
+            BodyHandle::new(1, 0),
+            ColliderHandle::new(1, 0),
+            true,
+            0.0,
+        );
+
+        assert_eq!(result.body_handle, BodyHandle::new(1, 0));
+        assert_eq!(result.collider_handle, ColliderHandle::new(1, 0));
+        assert!(result.is_inside);
+    }
+
+    #[test]
+    fn test_aabb_query_result() {
+        let result = AabbQueryResult::new(
+            BodyHandle::new(1, 0),
+            ColliderHandle::new(1, 0),
+        );
+
+        assert_eq!(result.body_handle, BodyHandle::new(1, 0));
+        assert_eq!(result.collider_handle, ColliderHandle::new(1, 0));
+    }
+
+    #[test]
+    fn test_ray_cast_result() {
+        let result = RayCastResult::new(
+            BodyHandle::new(1, 0),
+            ColliderHandle::new(1, 0),
+            Vec2::new(1.0, 2.0),
+            Vec2::new(0.0, 1.0),
+            5.0,
+            0.5,
+        );
+
+        assert_eq!(result.body_handle, BodyHandle::new(1, 0));
+        assert_eq!(result.hit_point, Vec2::new(1.0, 2.0));
+        assert_eq!(result.distance, 5.0);
+        assert_eq!(result.fraction, 0.5);
+    }
+
 }

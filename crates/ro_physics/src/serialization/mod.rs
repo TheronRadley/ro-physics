@@ -32,7 +32,11 @@ pub mod utils {
     /// Deserialize a type from RON
     #[inline]
     #[must_use]
-    pub fn from_ron<T: for<'de> Deserialize<'de>>(ron: &str) -> Result<T, ron::Error> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `ron` is not valid RON for `T`.
+    pub fn from_ron<T: for<'de> Deserialize<'de>>(ron: &str) -> Result<T, ron::error::SpannedError> {
         ron::from_str(ron)
     }
 

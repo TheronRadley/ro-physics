@@ -17,8 +17,7 @@ use crate::math::{utils::approx_eq, Vec2};
 /// - Bounding volume hierarchy
 ///
 /// The AABB is defined by its minimum and maximum corners.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Aabb {
     /// Minimum corner (bottom-left in standard coordinates)
@@ -227,6 +226,18 @@ impl Aabb {
         }
     }
 
+    /// Get the four corners of the AABB, counter-clockwise from `min`
+    #[inline]
+    #[must_use]
+    pub fn corners(self) -> [Vec2; 4] {
+        [
+            self.min,
+            Vec2::new(self.max.x, self.min.y),
+            self.max,
+            Vec2::new(self.min.x, self.max.y),
+        ]
+    }
+
     /// Expand the AABB to include a point
     #[inline]
     pub fn expand_by_point(&mut self, point: Vec2) {
@@ -430,6 +441,7 @@ impl Eq for Aabb {}
 mod tests {
     use super::*;
     use crate::constants::EPSILON;
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {
@@ -624,7 +636,7 @@ mod tests {
         assert_eq!(aabb.distance_to_point(Vec2::new(5.0, 5.0)), 0.0);
         
         // Point outside
-        assert!(approx_eq_eps(aabb.distance_to_point(Vec2::new(15.0, 15.0)), 5.0 * 2.0.f32.sqrt(), 1e-5));
+        assert!(approx_eq_eps(aabb.distance_to_point(Vec2::new(15.0, 15.0)), 5.0 * (2.0_f32).sqrt(), 1e-5));
         
         // Point at edge
         assert!(approx_eq(aabb.distance_to_point(Vec2::new(10.0, 5.0)), 0.0));

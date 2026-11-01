@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use crate::math::{Rot2, Transform, Vec2};
+use crate::math::{Transform, Vec2};
 use crate::geometry::Aabb;
 use crate::shapes::{Circle, MassProperties, Polygon};
 

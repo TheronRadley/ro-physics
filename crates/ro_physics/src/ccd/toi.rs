@@ -612,7 +612,7 @@ mod tests {
         let position_b = Vec2::new(3.0, 0.0);
         let velocity_b = Vec2::new(-2.0, 0.0);
         
-        let result = toi.circle_circle(
+        let result = TimeOfImpact::circle_circle(
             &circle_a, position_a, velocity_a,
             &circle_b, position_b, velocity_b,
             20, 1e-4
@@ -636,7 +636,7 @@ mod tests {
         let position_b = Vec2::new(3.0, 0.0);
         let velocity_b = Vec2::new(1.0, 0.0);
         
-        let result = toi.circle_circle(
+        let result = TimeOfImpact::circle_circle(
             &circle_a, position_a, velocity_a,
             &circle_b, position_b, velocity_b,
             20, 1e-4
@@ -658,7 +658,7 @@ mod tests {
         let position_b = Vec2::new(1.0, 0.0);
         let velocity_b = Vec2::zero();
         
-        let result = toi.circle_circle(
+        let result = TimeOfImpact::circle_circle(
             &circle_a, position_a, velocity_a,
             &circle_b, position_b, velocity_b,
             20, 1e-4

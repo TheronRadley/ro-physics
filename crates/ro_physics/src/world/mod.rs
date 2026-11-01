@@ -12,8 +12,8 @@ pub use world::World;
 
 /// World utilities
 pub mod utils {
-    use super::World;
-    use crate::bodies::BodyHandle;
+    use super::{World, WorldConfig};
+    use crate::math::Vec2;
 
     /// Create a simple world with default settings
     #[inline]

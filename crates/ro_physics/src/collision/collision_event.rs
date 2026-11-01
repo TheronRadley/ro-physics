@@ -19,6 +19,29 @@ pub enum CollisionEventType {
     Ended,
 }
 
+impl CollisionEventType {
+    /// Check if this type is [`CollisionEventType::Started`]
+    #[inline]
+    #[must_use]
+    pub const fn is_start(self) -> bool {
+        matches!(self, Self::Started)
+    }
+
+    /// Check if this type is [`CollisionEventType::Persisted`]
+    #[inline]
+    #[must_use]
+    pub const fn is_persist(self) -> bool {
+        matches!(self, Self::Persisted)
+    }
+
+    /// Check if this type is [`CollisionEventType::Ended`]
+    #[inline]
+    #[must_use]
+    pub const fn is_end(self) -> bool {
+        matches!(self, Self::Ended)
+    }
+}
+
 impl fmt::Display for CollisionEventType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

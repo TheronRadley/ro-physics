@@ -19,8 +19,7 @@ use crate::math::{utils::approx_eq, Vec2};
 /// The rotation is stored as a single f32, making it compact and efficient.
 /// For performance-critical operations, sine and cosine are cached
 /// when computed.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rot2 {
     /// Angle in radians
@@ -330,6 +329,7 @@ impl Eq for Rot2 {}
 mod tests {
     use super::*;
     use crate::constants::{PI_OVER_TWO, PI_OVER_FOUR};
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {
@@ -433,7 +433,7 @@ mod tests {
         let r3 = Rot2::new(-PI_OVER_TWO);
         let r4 = Rot2::new(PI_OVER_TWO);
         let mid2 = r3.lerp(r4, 0.5);
-        assert!(mid2.is_identity(1e-5));
+        assert!(mid2.is_identity_eps(1e-5));
     }
 
     #[test]

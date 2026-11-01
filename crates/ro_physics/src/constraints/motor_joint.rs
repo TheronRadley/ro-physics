@@ -7,7 +7,7 @@ use std::fmt;
 
 use crate::bodies::Body;
 use crate::constants::EPSILON;
-use crate::math::{Rot2, Transform, Vec2};
+use crate::math::Vec2;
 use crate::bodies::BodyHandle;
 use super::{BaseConstraint, Constraint, ConstraintHandle};
 
@@ -602,6 +602,7 @@ impl fmt::Display for MotorJoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::PI;
     use crate::bodies::BodyHandle;
     use crate::math::utils::approx_eq;
 

@@ -625,7 +625,7 @@ impl fmt::Display for Body {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::utils::approx_eq;
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {

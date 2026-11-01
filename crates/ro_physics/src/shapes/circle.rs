@@ -67,28 +67,28 @@ impl Circle {
     /// Get the area
     #[inline]
     #[must_use]
-    pub fn area(self) -> f32 {
+    pub fn area(&self) -> f32 {
         crate::constants::PI * self.radius * self.radius
     }
 
     /// Get the circumference
     #[inline]
     #[must_use]
-    pub fn circumference(self) -> f32 {
+    pub fn circumference(&self) -> f32 {
         2.0 * crate::constants::PI * self.radius
     }
 
     /// Calculate the moment of inertia for a given mass
     #[inline]
     #[must_use]
-    pub fn inertia(self, mass: f32) -> f32 {
+    pub fn inertia(&self, mass: f32) -> f32 {
         0.5 * mass * self.radius * self.radius
     }
 
     /// Calculate mass properties for a given density
     #[inline]
     #[must_use]
-    pub fn mass_properties(self, density: f32) -> MassProperties {
+    pub fn mass_properties(&self, density: f32) -> MassProperties {
         let area = self.area();
         let mass = area * density;
         let inertia = self.inertia(mass);
@@ -99,21 +99,21 @@ impl Circle {
     /// Calculate the AABB for the circle at a given position
     #[inline]
     #[must_use]
-    pub fn aabb(self, position: Vec2) -> Aabb {
+    pub fn aabb(&self, position: Vec2) -> Aabb {
         Aabb::from_center_half_extents(position, Vec2::splat(self.radius))
     }
 
     /// Check if a point is inside the circle
     #[inline]
     #[must_use]
-    pub fn contains_point(self, point: Vec2, center: Vec2) -> bool {
+    pub fn contains_point(&self, point: Vec2, center: Vec2) -> bool {
         (point - center).length_squared() <= self.radius * self.radius
     }
 
     /// Find the closest point on the circle to a given point
     #[inline]
     #[must_use]
-    pub fn closest_point(self, point: Vec2, center: Vec2) -> Vec2 {
+    pub fn closest_point(&self, point: Vec2, center: Vec2) -> Vec2 {
         let to_point = point - center;
         let distance = to_point.length();
 
@@ -127,7 +127,7 @@ impl Circle {
     /// Calculate the distance from a point to the circle
     #[inline]
     #[must_use]
-    pub fn distance_to_point(self, point: Vec2, center: Vec2) -> f32 {
+    pub fn distance_to_point(&self, point: Vec2, center: Vec2) -> f32 {
         let distance = (point - center).length();
         (distance - self.radius).max(0.0)
     }
@@ -135,14 +135,14 @@ impl Circle {
     /// Check if the circle is valid
     #[inline]
     #[must_use]
-    pub fn is_valid(self) -> bool {
+    pub fn is_valid(&self) -> bool {
         self.radius >= 0.0 && self.radius.is_finite()
     }
 
     /// Validate the circle
     #[inline]
     #[must_use]
-    pub fn validate(self) -> bool {
+    pub fn validate(&self) -> bool {
         if !self.radius.is_finite() {
             return false;
         }

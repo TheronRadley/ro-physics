@@ -20,7 +20,7 @@ use std::fmt;
 /// Returned by [`Polygon::try_new`] and [`Circle::try_new`] instead of
 /// panicking, so that invalid scenes can be reported rather than aborting the
 /// process.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShapeError {
     /// The shape has fewer vertices than the minimum (3 for polygons)
     TooFewVertices(usize),
