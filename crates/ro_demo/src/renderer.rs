@@ -292,15 +292,19 @@ impl Renderer {
     fn push_vertex(&mut self, world_x: f32, world_y: f32, color: [f32; 3]) {
         let width = self.size.width.max(1) as f32;
         let height = self.size.height.max(1) as f32;
-        let aspect = width / height;
 
-        let scale_x = 1.0 / (self.camera.scale.abs().max(f32::EPSILON) * aspect);
-        let scale_y = 1.0 / self.camera.scale.abs().max(f32::EPSILON);
+        // One projection, used by the CPU-side transform here and available
+        // for a uniform buffer later on.
+        let projection = self.camera.get_view_projection(width, height);
+        let scale_x = projection[0][0];
+        let scale_y = projection[1][1];
+        let translate_x = projection[3][0];
+        let translate_y = projection[3][1];
 
         self.vertices.push(Vertex {
             position: [
-                (world_x - self.camera.position.x) * scale_x,
-                (world_y - self.camera.position.y) * scale_y,
+                world_x * scale_x + translate_x,
+                world_y * scale_y + translate_y,
                 0.0,
             ],
             color,

@@ -82,6 +82,11 @@ jobs:
           cargo check --workspace --all-targets --all-features > /tmp/logs/workspace.txt 2>&1 || true
           tail -5 /tmp/logs/workspace.txt
 
+      - name: Clippy workspace
+        run: |
+          cargo clippy --workspace --all-targets --all-features -- -D warnings > /tmp/logs/clippy-workspace.txt 2>&1 || true
+          tail -5 /tmp/logs/clippy-workspace.txt
+
       - name: Publish logs
         if: always()
         run: |
