@@ -45,11 +45,11 @@ fn test_step_simulation() {
 
     // Create a dynamic body
     let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
-    world.add_circle(body, 0.5, 1.0);
+    let _ = world.add_circle(body, 0.5, 1.0);
 
     // Create a static ground
     let ground = world.create_static_body(Transform::identity());
-    world.add_box(ground, Vec2::new(10.0, 0.5), 1.0);
+    let _ = world.add_box(ground, Vec2::new(10.0, 0.5), 1.0);
 
     // Step the simulation
     world.step(1.0 / 60.0);
@@ -65,10 +65,10 @@ fn test_collision_detection() {
 
     // Create two circles that overlap
     let body1 = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body1, 1.0, 1.0);
+    let _ = world.add_circle(body1, 1.0, 1.0);
 
     let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0),Rot2::new(0.0)));
-    world.add_circle(body2, 1.0, 1.0);
+    let _ = world.add_circle(body2, 1.0, 1.0);
 
     // Step the simulation
     world.step(1.0 / 60.0);
@@ -84,11 +84,11 @@ fn test_circle_vs_box_collision() {
 
     // Create a dynamic circle
     let circle_body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
-    world.add_circle(circle_body, 0.5, 1.0);
+    let _ = world.add_circle(circle_body, 0.5, 1.0);
 
     // Create a static box
     let box_body = world.create_static_body(Transform::identity());
-    world.add_box(box_body, Vec2::new(2.0, 2.0), 1.0);
+    let _ = world.add_box(box_body, Vec2::new(2.0, 2.0), 1.0);
 
     // Step the simulation
     for _ in 0..10 {
@@ -107,10 +107,10 @@ fn test_box_vs_box_collision() {
 
     // Create two dynamic boxes
     let body1 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
-    world.add_box(body1, Vec2::new(0.5, 0.5), 1.0);
+    let _ = world.add_box(body1, Vec2::new(0.5, 0.5), 1.0);
 
     let body2 = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 6.0),Rot2::new(0.0)));
-    world.add_box(body2, Vec2::new(0.5, 0.5), 1.0);
+    let _ = world.add_box(body2, Vec2::new(0.5, 0.5), 1.0);
 
     // Step the simulation
     for _ in 0..10 {
@@ -130,13 +130,13 @@ fn test_stacking_stability() {
 
     // Create ground
     let ground = world.create_static_body(Transform::identity());
-    world.add_box(ground, Vec2::new(20.0, 0.5), 1.0);
+    let _ = world.add_box(ground, Vec2::new(20.0, 0.5), 1.0);
 
     // Create a stack of boxes
     let mut y = 1.0;
     for _ in 0..5 {
         let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y),Rot2::new(0.0)));
-        world.add_box(body, Vec2::new(1.0, 0.5), 1.0);
+        let _ = world.add_box(body, Vec2::new(1.0, 0.5), 1.0);
         y += 1.0;
     }
 
@@ -156,10 +156,10 @@ fn test_distance_joint_basic() {
     let mut world = World::default();
 
     let body_a = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body_a, 1.0, 1.0);
+    let _ = world.add_circle(body_a, 1.0, 1.0);
 
     let body_b = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 2.0), Rot2::identity()));
-    world.add_circle(body_b, 1.0, 1.0);
+    let _ = world.add_circle(body_b, 1.0, 1.0);
 
     let joint = world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());
     assert!(world.has_constraint(joint));
@@ -178,10 +178,10 @@ fn test_revolute_joint_basic() {
     let mut world = World::default();
 
     let body_a = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body_a, 1.0, 1.0);
+    let _ = world.add_circle(body_a, 1.0, 1.0);
 
     let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0), Rot2::identity()));
-    world.add_circle(body_b, 1.0, 1.0);
+    let _ = world.add_circle(body_b, 1.0, 1.0);
 
     let joint = world.create_revolute_joint(body_a, body_b, Vec2::new(1.0, 0.0));
     assert!(world.has_constraint(joint));
@@ -200,10 +200,10 @@ fn test_motor_joint_basic() {
     let mut world = World::default();
 
     let body_a = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body_a, 1.0, 1.0);
+    let _ = world.add_circle(body_a, 1.0, 1.0);
 
     let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0), Rot2::identity()));
-    world.add_circle(body_b, 1.0, 1.0);
+    let _ = world.add_circle(body_b, 1.0, 1.0);
 
     let joint = world.create_motor_joint(body_a, body_b);
     assert!(world.has_constraint(joint));
@@ -225,11 +225,11 @@ fn test_rotated_box_collision() {
     let static_body = world.create_static_body(
         Transform::new(Vec2::new(0.0, 0.0), Rot2::new(crate::constants::PI_OVER_FOUR))
     );
-    world.add_box(static_body, Vec2::new(2.0, 2.0), 1.0);
+    let _ = world.add_box(static_body, Vec2::new(2.0, 2.0), 1.0);
 
     // Create a dynamic circle
     let circle_body = world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0),Rot2::new(0.0)));
-    world.add_circle(circle_body, 1.0, 1.0);
+    let _ = world.add_circle(circle_body, 1.0, 1.0);
 
     // Step the simulation
     for _ in 0..10 {
@@ -249,10 +249,10 @@ fn test_event_handlers() {
 
     // Create two overlapping circles
     let body1 = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body1, 1.0, 1.0);
+    let _ = world.add_circle(body1, 1.0, 1.0);
 
     let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.5, 0.0),Rot2::new(0.0)));
-    world.add_circle(body2, 1.0, 1.0);
+    let _ = world.add_circle(body2, 1.0, 1.0);
 
     // Step the simulation
     world.step(1.0 / 60.0);
@@ -267,7 +267,7 @@ fn test_destroy_body() {
     let mut world = World::default();
 
     let body = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body, 1.0, 1.0);
+    let _ = world.add_circle(body, 1.0, 1.0);
 
     assert_eq!(world.body_count(), 1);
     assert_eq!(world.collider_count(), 1);
@@ -282,10 +282,10 @@ fn test_clear_world() {
     let mut world = World::default();
 
     let body1 = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body1, 1.0, 1.0);
+    let _ = world.add_circle(body1, 1.0, 1.0);
 
     let body2 = world.create_dynamic_body(Transform::new(Vec2::new(1.0, 0.0),Rot2::new(0.0)));
-    world.add_circle(body2, 1.0, 1.0);
+    let _ = world.add_circle(body2, 1.0, 1.0);
 
     assert_eq!(world.body_count(), 2);
     assert_eq!(world.collider_count(), 2);

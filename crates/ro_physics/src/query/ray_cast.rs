@@ -26,7 +26,8 @@ impl RayCast {
     pub const fn new(ray: Ray, max_distance: f32) -> Self {
         Self {
             ray,
-            max_distance: max_distance.max(0.0),
+            // `f32::max` is not `const` stable on the MSRV, so clamp by hand.
+            max_distance: if max_distance > 0.0 { max_distance } else { 0.0 },
         }
     }
 

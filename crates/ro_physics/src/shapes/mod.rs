@@ -99,7 +99,7 @@ pub mod utils {
     #[must_use]
     pub fn polygon_inertia(mass: f32, vertices: &[Vec2], centroid: Vec2) -> f32 {
         let n = vertices.len();
-        if n < 3 || !(mass > 0.0) {
+        if n < 3 || !(mass > 0.0 && mass.is_finite()) {
             return 0.0;
         }
 

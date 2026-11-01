@@ -9,7 +9,7 @@ use crate::bodies::Body;
 use crate::constants::EPSILON;
 use crate::math::Vec2;
 use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle};
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 
 /// A distance joint constraint.
 ///
@@ -216,6 +216,10 @@ impl DistanceJoint {
 }
 
 impl Constraint for DistanceJoint {
+    fn kind(&self) -> ConstraintType {
+        ConstraintType::Distance
+    }
+
     fn handle(&self) -> ConstraintHandle {
         self.base.handle()
     }

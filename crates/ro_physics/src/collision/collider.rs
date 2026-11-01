@@ -543,7 +543,4 @@ mod tests {
         (a - b).abs() <= 1e-6
     }
 
-    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
-        (a - b).abs() <= epsilon
-    }
 }

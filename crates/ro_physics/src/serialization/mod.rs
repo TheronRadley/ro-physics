@@ -10,28 +10,24 @@ pub mod utils {
 
     /// Serialize a type to JSON
     #[inline]
-    #[must_use]
     pub fn to_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
         serde_json::to_string(value)
     }
 
     /// Deserialize a type from JSON
     #[inline]
-    #[must_use]
     pub fn from_json<T: for<'de> Deserialize<'de>>(json: &str) -> Result<T, serde_json::Error> {
         serde_json::from_str(json)
     }
 
     /// Serialize a type to RON (Rusty Object Notation)
     #[inline]
-    #[must_use]
     pub fn to_ron<T: Serialize>(value: &T) -> Result<String, ron::Error> {
         ron::to_string(value)
     }
 
     /// Deserialize a type from RON
     #[inline]
-    #[must_use]
     ///
     /// # Errors
     ///
@@ -42,14 +38,12 @@ pub mod utils {
 
     /// Serialize a type to binary
     #[inline]
-    #[must_use]
     pub fn to_binary<T: Serialize>(value: &T) -> Result<Vec<u8>, bincode::Error> {
         bincode::serialize(value)
     }
 
     /// Deserialize a type from binary
     #[inline]
-    #[must_use]
     pub fn from_binary<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T, bincode::Error> {
         bincode::deserialize(bytes)
     }
@@ -91,7 +85,7 @@ mod tests {
         let vec = Vec2::new(1.0, 2.0);
         
         let bytes = to_binary(&vec).unwrap();
-        assert!(bytes.len() > 0);
+        assert!(!bytes.is_empty());
 
         let deserialized: Vec2 = from_binary(&bytes).unwrap();
         assert_eq!(deserialized, vec);

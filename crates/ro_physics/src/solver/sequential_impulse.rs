@@ -32,8 +32,6 @@ use super::SolverConfig;
 struct ContactConstraint {
     /// Index of the contact in its manifold
     index: usize,
-    /// Contact position in world space
-    position: Vec2,
     /// Contact normal (points from A to B)
     normal: Vec2,
     /// Contact tangent (`normal.perp()`)
@@ -116,6 +114,14 @@ impl SequentialImpulseSolver {
 
             // Two non-dynamic bodies cannot exchange impulses
             if !body_a.is_dynamic() && !body_b.is_dynamic() {
+                continue;
+            }
+
+            // A sleeping body is at rest by definition: solving its contacts
+            // would give it a small velocity without ever waking it, so the
+            // world wakes it first (see `World::wake_islands`) when the pair
+            // really has to move.
+            if body_a.is_sleeping() || body_b.is_sleeping() {
                 continue;
             }
 
@@ -219,7 +225,6 @@ impl SequentialImpulseSolver {
 
             constraints.push(ContactConstraint {
                 index,
-                position: contact.position(),
                 normal,
                 tangent,
                 ra,

@@ -6,8 +6,8 @@
 use std::fmt;
 
 use ro_physics::math::{Rot2, Transform, Vec2};
-use ro_physics::bodies::{Body, BodyHandle, BodyType};
-use ro_physics::constraints::{Constraint, ConstraintHandle, DistanceJoint, RevoluteJoint};
+use ro_physics::bodies::BodyHandle;
+use ro_physics::constraints::ConstraintHandle;
 use ro_physics::world::World;
 
 /// A ragdoll scene that demonstrates constraint system.
@@ -74,43 +74,43 @@ impl RagdollScene {
         
         // Torso (center of the ragdoll)
         self.torso = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0),Rot2::new(0.0)));
-        world.add_box(self.torso, Vec2::new(0.4, 0.6), 10.0);
+        let _ = world.add_box(self.torso, Vec2::new(0.4, 0.6), 10.0);
 
         // Head
         self.head = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.8),Rot2::new(0.0)));
-        world.add_circle(self.head, 0.3, 10.0);
+        let _ = world.add_circle(self.head, 0.3, 10.0);
 
         // Left upper arm
         self.left_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 9.5),Rot2::new(0.0)));
-        world.add_box(self.left_upper_arm, Vec2::new(0.15, 0.4), 10.0);
+        let _ = world.add_box(self.left_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Left lower arm
         self.left_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 8.8),Rot2::new(0.0)));
-        world.add_box(self.left_lower_arm, Vec2::new(0.15, 0.4), 10.0);
+        let _ = world.add_box(self.left_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Right upper arm
         self.right_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 9.5),Rot2::new(0.0)));
-        world.add_box(self.right_upper_arm, Vec2::new(0.15, 0.4), 10.0);
+        let _ = world.add_box(self.right_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Right lower arm
         self.right_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 8.8),Rot2::new(0.0)));
-        world.add_box(self.right_lower_arm, Vec2::new(0.15, 0.4), 10.0);
+        let _ = world.add_box(self.right_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
         // Left upper leg
         self.left_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 9.0),Rot2::new(0.0)));
-        world.add_box(self.left_upper_leg, Vec2::new(0.15, 0.5), 10.0);
+        let _ = world.add_box(self.left_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Left lower leg
         self.left_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 8.2),Rot2::new(0.0)));
-        world.add_box(self.left_lower_leg, Vec2::new(0.15, 0.5), 10.0);
+        let _ = world.add_box(self.left_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Right upper leg
         self.right_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 9.0),Rot2::new(0.0)));
-        world.add_box(self.right_upper_leg, Vec2::new(0.15, 0.5), 10.0);
+        let _ = world.add_box(self.right_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Right lower leg
         self.right_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 8.2),Rot2::new(0.0)));
-        world.add_box(self.right_lower_leg, Vec2::new(0.15, 0.5), 10.0);
+        let _ = world.add_box(self.right_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
         // Create constraints to connect the ragdoll
         
@@ -341,13 +341,9 @@ impl Scene for RagdollScene {
         self.assemble(world);
     }
 
-    fn update(&mut self, world: &mut World, dt: f32) {
-        // Apply a small upward force to the torso to keep it from falling too fast
-        // This simulates the ragdoll being "alive" and moving
-        if self.assembled {
-            // Optional: Apply some random forces to make it more interesting
-            // For now, just let physics do its thing
-        }
+    fn update(&mut self, _world: &mut World, _dt: f32) {
+        // The ragdoll is driven entirely by the simulation: joints hold it
+        // together and gravity does the rest, so there is nothing to do here.
     }
 
     fn name(&self) -> &str {
@@ -370,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_ragdoll_creation() {
-        let mut scene = RagdollScene::new();
+        let scene = RagdollScene::new();
         assert!(!scene.is_assembled());
         assert_eq!(scene.body_count(), 0);
         assert_eq!(scene.constraint_count(), 0);

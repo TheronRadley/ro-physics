@@ -222,7 +222,7 @@ impl Shape {
     #[must_use]
     pub fn clone_box(&self) -> Box<dyn ShapeTrait> {
         match self {
-            Shape::Circle(c) => Box::new(c.clone()),
+            Shape::Circle(c) => Box::new(*c),
             Shape::Polygon(p) => Box::new(p.clone()),
         }
     }
@@ -330,7 +330,7 @@ impl ShapeTrait for Circle {
     }
 
     fn clone_box(&self) -> Box<dyn ShapeTrait> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
@@ -498,7 +498,7 @@ mod tests {
         let polygon = Shape::Polygon(Polygon::from_rectangle(2.0, 2.0));
 
         let circle_area = circle.area();
-        assert!(approx_eq(circle_area, 78.53981633974483));
+        assert!(approx_eq(circle_area, 25.0 * std::f32::consts::PI));
 
         let polygon_area = polygon.area();
         assert!(approx_eq(polygon_area, 4.0));
@@ -534,7 +534,4 @@ mod tests {
         (a - b).abs() <= 1e-6
     }
 
-    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
-        (a - b).abs() <= epsilon
-    }
 }

@@ -9,7 +9,7 @@ use crate::bodies::Body;
 use crate::constants::{EPSILON, PI};
 use crate::math::Vec2;
 use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle};
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 
 /// A revolute joint constraint.
 ///
@@ -318,6 +318,10 @@ impl RevoluteJoint {
 }
 
 impl Constraint for RevoluteJoint {
+    fn kind(&self) -> ConstraintType {
+        ConstraintType::Revolute
+    }
+
     fn handle(&self) -> ConstraintHandle {
         self.base.handle()
     }
@@ -783,7 +787,7 @@ mod tests {
         let body_a = BodyHandle::new(1, 0);
         let body_b = BodyHandle::new(2, 0);
 
-        let mut body_a_obj = Body::new_dynamic(body_a);
+        let body_a_obj = Body::new_dynamic(body_a);
         let mut body_b_obj = Body::new_dynamic(body_b);
 
         let mut joint = RevoluteJoint::new(handle, body_a, body_b, Vec2::zero());

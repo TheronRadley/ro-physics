@@ -113,10 +113,8 @@ pub mod utils {
         gravity: Vec2,
         dt: f32,
     ) {
-        for body in bodies {
-            if let Some(body) = body {
-                integrator.integrate(body, gravity, dt);
-            }
+        for body in bodies.iter_mut().flatten() {
+            integrator.integrate(body, gravity, dt);
         }
     }
 }

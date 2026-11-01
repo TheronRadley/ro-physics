@@ -9,7 +9,7 @@ mod distance_joint;
 mod revolute_joint;
 mod motor_joint;
 
-pub use constraint::{BaseConstraint, Constraint};
+pub use constraint::{BaseConstraint, Constraint, ConstraintType};
 pub use constraint_handle::{ConstraintHandle, ConstraintHandleGenerator};
 pub use distance_joint::DistanceJoint;
 pub use revolute_joint::RevoluteJoint;

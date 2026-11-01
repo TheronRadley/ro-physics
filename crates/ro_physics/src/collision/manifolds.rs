@@ -166,7 +166,7 @@ impl fmt::Display for Contact {
 /// each shape plus a flag recording whether the pair was flipped. Contacts
 /// whose ids match between frames are considered the same contact, which lets
 /// the solver seed them with last frame's impulses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContactId {
     /// Feature index on body A
@@ -222,16 +222,6 @@ impl ContactId {
             (self.feature_b, self.feature_a)
         } else {
             (self.feature_a, self.feature_b)
-        }
-    }
-}
-
-impl Default for ContactId {
-    fn default() -> Self {
-        Self {
-            feature_a: 0,
-            feature_b: 0,
-            flipped: false,
         }
     }
 }
@@ -550,20 +540,25 @@ impl ContactManifold {
         let mut merged: Vec<Contact> = Vec::with_capacity(MAX_CONTACTS);
         let mut used = vec![false; count];
 
-        for i in 0..count {
+        for (i, contact) in self.contacts.iter().copied().enumerate().take(count) {
             if used[i] {
                 continue;
             }
 
-            let mut merged_contact = self.contacts[i];
+            let mut merged_contact = contact;
             used[i] = true;
 
-            for j in (i + 1)..count {
+            for (j, contact_j) in self
+                .contacts
+                .iter()
+                .copied()
+                .enumerate()
+                .skip(i + 1)
+                .take(count.saturating_sub(i + 1))
+            {
                 if used[j] {
                     continue;
                 }
-
-                let contact_j = self.contacts[j];
                 let delta = contact_j.position - merged_contact.position;
 
                 if delta.length_squared() <= tolerance * tolerance {

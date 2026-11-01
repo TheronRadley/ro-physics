@@ -45,7 +45,7 @@ pub mod utils {
         bodies
             .iter()
             .filter(|b| b.is_dynamic())
-            .map(|b| b.mass())
+            .map(Body::mass)
             .sum()
     }
 

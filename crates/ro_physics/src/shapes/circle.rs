@@ -186,7 +186,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_negative_radius() {
-        Circle::new(-1.0);
+        let _ = Circle::new(-1.0);
     }
 
     #[test]
@@ -194,8 +194,8 @@ mod tests {
         let circle = Circle::new(5.0);
         
         assert_eq!(circle.diameter(), 10.0);
-        assert!(approx_eq(circle.area(), 78.53981633974483));
-        assert!(approx_eq(circle.circumference(), 31.41592653589793));
+        assert!(approx_eq(circle.area(), 25.0 * std::f32::consts::PI));
+        assert!(approx_eq(circle.circumference(), 10.0 * std::f32::consts::PI));
     }
 
     #[test]

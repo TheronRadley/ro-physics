@@ -656,7 +656,7 @@ mod tests {
     #[test]
     fn test_remove_unknown_node_is_ignored() {
         let mut tree = AabbTree::new(16);
-        tree.insert(box_at(0.0, 0.0), 0);
+        let _ = tree.insert(box_at(0.0, 0.0), 0);
 
         tree.remove(4242);
         tree.remove(usize::MAX);
@@ -668,7 +668,7 @@ mod tests {
     fn test_node_reuse() {
         let mut tree = AabbTree::new(16);
         let a = tree.insert(box_at(0.0, 0.0), 0);
-        tree.insert(box_at(1.0, 0.0), 1);
+        let _ = tree.insert(box_at(1.0, 0.0), 1);
         tree.remove(a);
 
         let c = tree.insert(box_at(2.0, 0.0), 2);
@@ -728,8 +728,8 @@ mod tests {
     #[test]
     fn test_query_ray_sorted() {
         let mut tree = AabbTree::new(16);
-        tree.insert(box_at(10.0, 0.0), 0);
-        tree.insert(box_at(5.0, 0.0), 1);
+        let _ = tree.insert(box_at(10.0, 0.0), 0);
+        let _ = tree.insert(box_at(5.0, 0.0), 1);
 
         let hits = tree.query_ray(Vec2::zero(), Vec2::unit_x(), 100.0);
 
@@ -740,8 +740,8 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut tree = AabbTree::new(16);
-        tree.insert(box_at(0.0, 0.0), 0);
-        tree.insert(box_at(1.0, 0.0), 1);
+        let _ = tree.insert(box_at(0.0, 0.0), 0);
+        let _ = tree.insert(box_at(1.0, 0.0), 1);
 
         tree.clear();
 

@@ -52,6 +52,11 @@ impl SweptCollisionDetector {
             return None;
         }
 
+        // A sweep is only meaningful over a positive, finite timestep.
+        if !(dt > 0.0 && dt.is_finite()) {
+            return None;
+        }
+
         // CCD exists to stop fast movers from passing through each other; when
         // neither body can move there is nothing to sweep, and any existing
         // overlap is the narrow phase's job.
@@ -71,8 +76,8 @@ impl SweptCollisionDetector {
         let angular_velocity_b = body_b.angular_velocity();
 
         let toi = self.calculate_toi(
-            &shape_a, transform_a, velocity_a, angular_velocity_a,
-            &shape_b, transform_b, velocity_b, angular_velocity_b,
+            shape_a, transform_a, velocity_a, angular_velocity_a,
+            shape_b, transform_b, velocity_b, angular_velocity_b,
         );
 
         if toi.is_colliding() && toi.toi < 1.0 {
@@ -173,7 +178,7 @@ impl SweptCollisionDetector {
             return false;
         }
 
-        if !(dt > 0.0) || (!body_a.is_dynamic() && !body_b.is_dynamic()) {
+        if !(dt > 0.0 && dt.is_finite()) || (!body_a.is_dynamic() && !body_b.is_dynamic()) {
             return false;
         }
 

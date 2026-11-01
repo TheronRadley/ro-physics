@@ -219,7 +219,7 @@ fn test_bvh_ray_cast_simple() {
 
     // Ray from left through first AABB
     let results = bvh.ray_cast_all(Vec2::new(-5.0, 0.0), Vec2::new(1.0, 0.0), 100.0);
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
     assert_eq!(results[0].0, BodyHandle::new(1, 0));
 }
 
@@ -274,12 +274,12 @@ fn test_point_query_on_edge() {
 
     // Create a box at origin with size 2x2
     let body = world.create_static_body(Transform::identity());
-    world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
+    let _ = world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
 
     // Query point on the edge of the box
     let results = world.point_query(Vec2::new(1.0, 0.0));
     // Point on edge should be considered inside or on boundary
-    assert!(!results.is_empty() || results.len() > 0);
+    assert!(!results.is_empty());
 }
 
 #[test]
@@ -288,12 +288,12 @@ fn test_point_query_on_vertex() {
 
     // Create a box at origin with size 2x2
     let body = world.create_static_body(Transform::identity());
-    world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
+    let _ = world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
 
     // Query point on the vertex of the box
     let results = world.point_query(Vec2::new(1.0, 1.0));
     // Point on vertex should be considered inside or on boundary
-    assert!(!results.is_empty() || results.len() > 0);
+    assert!(!results.is_empty());
 }
 
 #[test]
@@ -310,14 +310,14 @@ fn test_point_query_multiple_bodies() {
 
     // Create multiple bodies
     let body1 = world.create_static_body(Transform::identity());
-    world.add_circle(body1, 2.0, 1.0);
+    let _ = world.add_circle(body1, 2.0, 1.0);
 
     let body2 = world.create_static_body(Transform::new(Vec2::new(5.0, 0.0), Rot2::identity()));
-    world.add_circle(body2, 2.0, 1.0);
+    let _ = world.add_circle(body2, 2.0, 1.0);
 
     // Query point at origin - should only hit first body
     let results = world.point_query(Vec2::new(0.0, 0.0));
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 
     // Verify we got the right body
     let has_body1 = results.iter().any(|r| r.body_handle == body1);
@@ -331,14 +331,14 @@ fn test_aabb_query_touching() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
+    let _ = world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
 
     // Query AABB that touches but doesn't overlap
     let query_aabb = Aabb::new(Vec2::new(1.0, -1.0), Vec2::new(2.0, 1.0));
     let results = world.aabb_query(query_aabb);
 
     // Touching AABBs should be considered overlapping
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 }
 
 #[test]
@@ -346,13 +346,13 @@ fn test_aabb_query_contains() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
+    let _ = world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
 
     // Query AABB that contains the body's AABB
     let query_aabb = Aabb::new(Vec2::new(-10.0, -10.0), Vec2::new(10.0, 10.0));
     let results = world.aabb_query(query_aabb);
 
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 }
 
 #[test]
@@ -360,13 +360,13 @@ fn test_aabb_query_contained() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_box(body, Vec2::new(10.0, 10.0), 1.0);
+    let _ = world.add_box(body, Vec2::new(10.0, 10.0), 1.0);
 
     // Query AABB that is inside the body's AABB
     let query_aabb = Aabb::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0));
     let results = world.aabb_query(query_aabb);
 
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 }
 
 // ========== Ray Cast Edge Cases ==========
@@ -376,7 +376,7 @@ fn test_ray_cast_tangent() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_circle(body, 2.0, 1.0);
+    let _ = world.add_circle(body, 2.0, 1.0);
 
     // Ray along the tangent line of the circle, starting beside it
     let ray = Ray::new(Vec2::new(-5.0, 2.0), Vec2::new(1.0, 0.0));
@@ -394,7 +394,7 @@ fn test_ray_cast_from_inside() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_circle(body, 5.0, 1.0);
+    let _ = world.add_circle(body, 5.0, 1.0);
 
     // Ray starting inside the circle
     let ray = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
@@ -411,7 +411,7 @@ fn test_ray_cast_origin_at_center() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_circle(body, 2.0, 1.0);
+    let _ = world.add_circle(body, 2.0, 1.0);
 
     // Ray starting at circle center
     let ray = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
@@ -428,7 +428,7 @@ fn test_ray_cast_opposite_direction() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_circle(body, 2.0, 1.0);
+    let _ = world.add_circle(body, 2.0, 1.0);
 
     // Ray pointing away from circle
     let ray = Ray::new(Vec2::new(5.0, 0.0), Vec2::new(1.0, 0.0));
@@ -443,7 +443,7 @@ fn test_ray_cast_zero_length() {
     let mut world = World::default();
 
     let body = world.create_static_body(Transform::identity());
-    world.add_circle(body, 2.0, 1.0);
+    let _ = world.add_circle(body, 2.0, 1.0);
 
     // Ray with zero length
     let ray = Ray::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0));
@@ -473,7 +473,7 @@ fn test_ray_cast_all_multiple() {
             Vec2::new(i as f32 * 3.0, 0.0),
             Rot2::identity(),
         ));
-        world.add_circle(body, 1.0, 1.0);
+        let _ = world.add_circle(body, 1.0, 1.0);
     }
 
     // Ray along the line
@@ -502,7 +502,7 @@ fn test_point_query_polygon() {
         Vec2::new(0.0, 1.0),
     ];
     let body = world.create_static_body(Transform::identity());
-    world.add_polygon(body, vertices, 1.0);
+    let _ = world.add_polygon(body, vertices, 1.0);
 
     // Query point inside triangle
     let results = world.point_query(Vec2::new(0.0, 0.0));
@@ -525,7 +525,7 @@ fn test_ray_cast_polygon() {
         Vec2::new(-1.0, 1.0),
     ];
     let body = world.create_static_body(Transform::identity());
-    world.add_polygon(body, vertices, 1.0);
+    let _ = world.add_polygon(body, vertices, 1.0);
 
     // Ray through the square
     let ray = Ray::new(Vec2::new(-5.0, 0.0), Vec2::new(1.0, 0.0));
@@ -548,7 +548,7 @@ fn test_aabb_query_polygon() {
         Vec2::new(-1.0, 1.0),
     ];
     let body = world.create_static_body(Transform::new(Vec2::zero(), Rot2::new(std::f32::consts::PI / 4.0)));
-    world.add_polygon(body, vertices, 1.0);
+    let _ = world.add_polygon(body, vertices, 1.0);
 
     // Query AABB that overlaps
     let query_aabb = Aabb::new(Vec2::new(-2.0, -2.0), Vec2::new(2.0, 2.0));

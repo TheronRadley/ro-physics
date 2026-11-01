@@ -9,7 +9,7 @@ use crate::bodies::Body;
 use crate::constants::EPSILON;
 use crate::math::Vec2;
 use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle};
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 
 /// A motor joint constraint.
 ///
@@ -336,6 +336,10 @@ impl MotorJoint {
 }
 
 impl Constraint for MotorJoint {
+    fn kind(&self) -> ConstraintType {
+        ConstraintType::Motor
+    }
+
     fn handle(&self) -> ConstraintHandle {
         self.base.handle()
     }

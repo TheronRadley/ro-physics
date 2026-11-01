@@ -11,12 +11,13 @@ use std::fmt;
 /// - **Static**: Fixed in place, infinite mass, does not move
 /// - **Dynamic**: Affected by forces and collisions, normal physics behavior
 /// - **Kinematic**: Moves according to velocity but not affected by forces
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub enum BodyType {
     /// Static body - fixed in place, infinite mass
     Static,
     /// Dynamic body - affected by forces and collisions
+    #[default]
     Dynamic,
     /// Kinematic body - moves according to velocity but not affected by forces
     Kinematic,
@@ -42,12 +43,6 @@ impl BodyType {
     #[must_use]
     pub fn is_kinematic(self) -> bool {
         matches!(self, BodyType::Kinematic)
-    }
-}
-
-impl Default for BodyType {
-    fn default() -> Self {
-        Self::Dynamic
     }
 }
 

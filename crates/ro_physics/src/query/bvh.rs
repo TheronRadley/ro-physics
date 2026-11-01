@@ -89,7 +89,7 @@ impl Bvh {
         self.sort_along_axis(&mut indices, 0);
 
         // Recursively build the tree
-        self.root = Some(self.build_node(&indices, 0));
+        self.root = Some(self.build_node(&indices));
     }
 
     /// Sort indices along a given axis
@@ -104,7 +104,7 @@ impl Bvh {
     }
 
     /// Build a BVH node from a range of indices
-    fn build_node(&mut self, indices: &[usize], depth: usize) -> usize {
+    fn build_node(&mut self, indices: &[usize]) -> usize {
         if indices.len() == 1 {
             // Leaf node
             let node = BvhNode {
@@ -137,8 +137,8 @@ impl Bvh {
         }
 
         // Build children
-        let left_child = self.build_node(left_indices, depth + 1);
-        let right_child = self.build_node(right_indices, depth + 1);
+        let left_child = self.build_node(left_indices);
+        let right_child = self.build_node(right_indices);
 
         let node = BvhNode {
             aabb,
@@ -373,7 +373,7 @@ impl Bvh {
     pub fn rebuild(&mut self) {
         if !self.collider_aabbs.is_empty() {
             let indices: Vec<usize> = (0..self.collider_aabbs.len()).collect();
-            self.root = Some(self.build_node(&indices, 0));
+            self.root = Some(self.build_node(&indices));
         } else {
             self.root = None;
         }

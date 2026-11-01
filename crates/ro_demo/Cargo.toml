@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 ro_physics = { path = "../ro_physics", features = ["serialization"] }
 winit = { workspace = true }
 wgpu = { workspace = true }
+bytemuck = { workspace = true }
 pollster = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }

@@ -94,7 +94,7 @@ fn inside_contact(
     let depth = -best_separation;
     let penetration = radius + depth;
 
-    if !(penetration > 0.0) {
+    if !(penetration > 0.0 && penetration.is_finite()) {
         return None;
     }
 

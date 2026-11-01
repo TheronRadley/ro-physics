@@ -685,7 +685,7 @@ impl World {
     #[must_use]
     pub fn get_constraint(&self, handle: ConstraintHandle) -> Option<&dyn Constraint> {
         let index = *self.constraint_map.get(&handle)?;
-        self.constraints.get(index)?.as_ref().map(|c| c.as_ref())
+        self.constraints.get(index)?.as_ref().map(|c| &**c)
     }
 
     /// Get a constraint by handle mutably
@@ -1273,7 +1273,11 @@ impl World {
                     let body_b_handle = constraint.body_b();
 
                     if let Some((body_a, body_b)) = self.two_bodies_mut(body_a_handle, body_b_handle) {
-                        constraint.solve(body_a, body_b);
+                        // Joints must not nudge a sleeping body: it is woken
+                        // first (see `wake_islands`) when it really has to move.
+                        if !body_a.is_sleeping() && !body_b.is_sleeping() {
+                            constraint.solve(body_a, body_b);
+                        }
                     }
                 }
 
@@ -1318,13 +1322,25 @@ impl World {
         Some((first.as_mut()?, second.as_mut()?))
     }
 
-    /// Wake sleeping bodies that are in contact with a moving body
+    /// Wake sleeping bodies that are touching or joined to a moving body
+    ///
+    /// Wake propagation is what keeps a sleeping stack asleep while still
+    /// letting it react the moment something moves into it. Contacts and
+    /// joints both transmit motion, so both are treated as edges of the
+    /// contact graph.
     fn wake_islands(&mut self) {
-        let pairs: Vec<(BodyHandle, BodyHandle)> = self
+        let mut pairs: Vec<(BodyHandle, BodyHandle)> = self
             .manifolds
             .iter()
             .map(|manifold| (manifold.body_a(), manifold.body_b()))
             .collect();
+
+        pairs.extend(
+            self.constraints
+                .iter()
+                .flatten()
+                .map(|constraint| (constraint.body_a(), constraint.body_b())),
+        );
 
         for (handle_a, handle_b) in pairs {
             let Some(index_a) = self.body_map.get(&handle_a).copied() else {
@@ -1644,9 +1660,9 @@ mod tests {
         let a = world.create_dynamic_body(Transform::identity());
         let b = world.create_dynamic_body(Transform::from_translation(Vec2::new(1.0, 0.0)));
 
-        world.add_circle(a, 0.5, 1.0);
-        world.add_box(b, Vec2::splat(0.5), 1.0);
-        world.create_distance_joint(a, b, Vec2::zero(), Vec2::zero());
+        let _ = world.add_circle(a, 0.5, 1.0);
+        let _ = world.add_box(b, Vec2::splat(0.5), 1.0);
+        let _ = world.create_distance_joint(a, b, Vec2::zero(), Vec2::zero());
 
         assert_eq!(world.collider_count(), 2);
         assert_eq!(world.constraint_count(), 1);
@@ -1744,8 +1760,8 @@ mod tests {
         let mut world = World::default();
 
         let body = world.create_dynamic_body(Transform::identity());
-        world.add_box(body, Vec2::splat(0.5), 1.0); // area 1
-        world.add_box(body, Vec2::splat(0.5), 1.0); // area 1
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0); // area 1
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0); // area 1
 
         let body = world.get_body(body).expect("body");
         assert!(approx_eq_eps(body.mass(), 2.0, 1e-4));
@@ -1756,7 +1772,7 @@ mod tests {
         let mut world = World::default();
 
         let body = world.create_static_body(Transform::identity());
-        world.add_box(body, Vec2::splat(0.5), 1.0);
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0);
 
         let body = world.get_body(body).expect("body");
         assert_eq!(body.mass(), 0.0);
@@ -1768,7 +1784,7 @@ mod tests {
         let mut world = World::with_gravity(Vec2::new(0.0, -10.0));
 
         let body_handle = world.create_dynamic_body(Transform::identity());
-        world.add_circle(body_handle, 0.5, 1.0);
+        let _ = world.add_circle(body_handle, 0.5, 1.0);
 
         world.step(1.0 / 60.0);
 
@@ -1784,7 +1800,7 @@ mod tests {
     fn test_step_rejects_invalid_timesteps() {
         let mut world = World::default();
         let body_handle = world.create_dynamic_body(Transform::identity());
-        world.add_circle(body_handle, 0.5, 1.0);
+        let _ = world.add_circle(body_handle, 0.5, 1.0);
 
         world.step(0.0);
         world.step(-1.0);
@@ -1803,10 +1819,10 @@ mod tests {
         let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
 
         let ground = world.create_static_body(Transform::from_translation(Vec2::new(0.0, -1.0)));
-        world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
+        let _ = world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
 
         let body = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 3.0)));
-        world.add_box(body, Vec2::splat(0.5), 1.0);
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0);
 
         for _ in 0..240 {
             world.step(1.0 / 60.0);
@@ -1843,10 +1859,12 @@ mod tests {
         world.step(1.0 / 60.0);
         assert!(world.events().is_empty());
 
-        // Keep pushing them together: one Started event, then persisted ones
+        // Keep pushing them together: one Started event, then persisted ones.
+        // The boxes start 3 m apart (centres at -2 and 2, half extents 0.5),
+        // so at 5 m/s each they need roughly 18 steps of 1/60 s to meet.
         let mut started = 0;
         let mut persisted = 0;
-        for _ in 0..10 {
+        for _ in 0..40 {
             world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(5.0, 0.0));
             world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-5.0, 0.0));
 
@@ -1881,11 +1899,11 @@ mod tests {
             .set_is_sensor(true);
 
         let body = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 0.5)));
-        world.add_box(body, Vec2::splat(0.5), 1.0);
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0);
 
         world.step(1.0 / 60.0);
 
-        assert!(world.events().iter().any(|event| event.is_sensor()));
+        assert!(world.events().iter().any(CollisionEvent::is_sensor));
 
         let body = world.get_body(body).expect("body");
         // Gravity is disabled, so the body must keep its (zero) velocity:
@@ -1898,7 +1916,7 @@ mod tests {
         let mut world = World::default();
 
         let body = world.create_static_body(Transform::identity());
-        world.add_circle(body, 1.0, 0.0);
+        let _ = world.add_circle(body, 1.0, 0.0);
 
         let ray = Ray::new(Vec2::new(-5.0, 0.0), Vec2::unit_x());
         let hit = world.ray_cast(ray, 100.0).expect("hit");
@@ -1912,7 +1930,7 @@ mod tests {
     fn test_ray_cast_edge_cases() {
         let mut world = World::default();
         let body = world.create_static_body(Transform::identity());
-        world.add_box(body, Vec2::splat(1.0), 0.0);
+        let _ = world.add_box(body, Vec2::splat(1.0), 0.0);
 
         // Zero length direction
         assert!(world.ray_cast(Ray::new(Vec2::zero(), Vec2::zero()), 10.0).is_none());
@@ -1936,7 +1954,7 @@ mod tests {
         let mut world = World::default();
 
         let body = world.create_static_body(Transform::identity());
-        world.add_box(body, Vec2::splat(1.0), 0.0);
+        let _ = world.add_box(body, Vec2::splat(1.0), 0.0);
 
         assert_eq!(world.point_query(Vec2::new(0.5, 0.5)).len(), 1);
         assert!(world.point_query(Vec2::new(5.0, 5.0)).is_empty());
@@ -1954,10 +1972,10 @@ mod tests {
         let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
 
         let ground = world.create_static_body(Transform::from_translation(Vec2::new(0.0, -1.0)));
-        world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
+        let _ = world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
 
         let body = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 0.0)));
-        world.add_box(body, Vec2::splat(0.5), 1.0);
+        let _ = world.add_box(body, Vec2::splat(0.5), 1.0);
 
         for _ in 0..600 {
             world.step(1.0 / 60.0);
@@ -1966,35 +1984,6 @@ mod tests {
         let body = world.get_body(body).expect("body");
         assert!(body.is_sleeping(), "a body at rest should fall asleep");
         assert_eq!(body.linear_velocity(), Vec2::zero());
-    }
-
-    #[test]
-    fn debug_resting_body_diagnostics() {
-        let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
-
-        let ground = world.create_static_body(Transform::from_translation(Vec2::new(0.0, -1.0)));
-        world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
-
-        let body = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 0.0)));
-        world.add_box(body, Vec2::splat(0.5), 1.0);
-
-        let mut log = String::new();
-        for step in 0..600 {
-            world.step(1.0 / 60.0);
-
-            if step % 60 == 0 || step > 597 {
-                let b = world.get_body(body).expect("body");
-                log.push_str(&format!(
-                    "step {step}: pos {:?} vel {:?} sleeping {} timer {}\n",
-                    b.position(),
-                    b.linear_velocity(),
-                    b.is_sleeping(),
-                    b.sleep_timer()
-                ));
-            }
-        }
-
-        panic!("{log}");
     }
 
     #[test]
@@ -2015,7 +2004,7 @@ mod tests {
         let mut world = World::default();
 
         let body_handle = world.create_dynamic_body(Transform::identity());
-        world.add_circle(body_handle, 1.0, 1.0);
+        let _ = world.add_circle(body_handle, 1.0, 1.0);
 
         assert_eq!(world.body_count(), 1);
         assert_eq!(world.collider_count(), 1);
@@ -2141,13 +2130,13 @@ mod tests {
         let mut world = World::default();
 
         let body_a = world.create_dynamic_body(Transform::identity());
-        world.add_circle(body_a, 1.0, 1.0);
+        let _ = world.add_circle(body_a, 1.0, 1.0);
 
         let body_b =
             world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 2.0)));
-        world.add_circle(body_b, 1.0, 1.0);
+        let _ = world.add_circle(body_b, 1.0, 1.0);
 
-        world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());
+        let _ = world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());
 
         world.step(1.0 / 60.0);
 
@@ -2161,7 +2150,7 @@ mod tests {
 
         let body_a = world.create_dynamic_body(Transform::identity());
         let body_b = world.create_dynamic_body(Transform::from_translation(Vec2::new(1.0, 0.0)));
-        world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());
+        let _ = world.create_distance_joint(body_a, body_b, Vec2::zero(), Vec2::zero());
 
         assert_eq!(world.constraint_count(), 1);
 

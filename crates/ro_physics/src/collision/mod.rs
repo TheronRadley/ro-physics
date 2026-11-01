@@ -14,7 +14,7 @@ pub use broad_phase::{BroadPhase, BroadPhaseConfig};
 pub use narrow_phase::{NarrowPhase, NarrowPhaseConfig};
 pub use manifolds::{ContactManifold, Contact, ContactId};
 pub use collider::{Collider, ColliderHandle, ColliderHandleGenerator};
-pub use filter::Filter;
+pub use filter::{categories, Filter};
 pub use collision_event::{CollisionEvent, CollisionEventHandler, CollisionEventType, SimpleCollisionEventHandler};
 
 /// Collision utilities

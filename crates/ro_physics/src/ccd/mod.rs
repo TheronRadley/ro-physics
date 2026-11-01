@@ -35,7 +35,7 @@ pub mod utils {
     #[inline]
     #[must_use]
     pub fn is_valid_toi(toi: f32) -> bool {
-        toi >= 0.0 && toi <= 1.0
+        (0.0..=1.0).contains(&toi)
     }
 
     /// Clamp time of impact to valid range

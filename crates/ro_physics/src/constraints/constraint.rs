@@ -14,6 +14,9 @@ use super::ConstraintHandle;
 /// Constraints restrict the relative motion of bodies in specific ways.
 /// All constraint types implement this trait.
 pub trait Constraint: fmt::Debug + Send + Sync {
+    /// Which kind of constraint this is
+    fn kind(&self) -> ConstraintType;
+
     /// Get the constraint handle
     fn handle(&self) -> ConstraintHandle;
 
@@ -137,23 +140,23 @@ impl BaseConstraint {
 }
 
 /// Enum of all constraint types
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub enum ConstraintType {
     /// Distance joint (point-to-point constraint)
-    DistanceJoint,
+    Distance,
     /// Revolute joint (hinge constraint)
-    RevoluteJoint,
+    Revolute,
     /// Motor joint (controlled rotation)
-    MotorJoint,
+    Motor,
 }
 
 impl fmt::Display for ConstraintType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConstraintType::DistanceJoint => write!(f, "DistanceJoint"),
-            ConstraintType::RevoluteJoint => write!(f, "RevoluteJoint"),
-            ConstraintType::MotorJoint => write!(f, "MotorJoint"),
+            ConstraintType::Distance => write!(f, "Distance"),
+            ConstraintType::Revolute => write!(f, "Revolute"),
+            ConstraintType::Motor => write!(f, "Motor"),
         }
     }
 }
@@ -181,12 +184,12 @@ mod tests {
 
     #[test]
     fn test_constraint_type_display() {
-        let distance = ConstraintType::DistanceJoint;
-        let revolute = ConstraintType::RevoluteJoint;
-        let motor = ConstraintType::MotorJoint;
+        let distance = ConstraintType::Distance;
+        let revolute = ConstraintType::Revolute;
+        let motor = ConstraintType::Motor;
 
-        assert_eq!(format!("{}", distance), "DistanceJoint");
-        assert_eq!(format!("{}", revolute), "RevoluteJoint");
-        assert_eq!(format!("{}", motor), "MotorJoint");
+        assert_eq!(format!("{distance}"), "Distance");
+        assert_eq!(format!("{revolute}"), "Revolute");
+        assert_eq!(format!("{motor}"), "Motor");
     }
 }

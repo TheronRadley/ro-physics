@@ -677,7 +677,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_new_panics_on_invalid_geometry() {
-        Polygon::new(vec![Vec2::zero(), Vec2::new(1.0, 0.0)]);
+        let _ = Polygon::new(vec![Vec2::zero(), Vec2::new(1.0, 0.0)]);
     }
 
     #[test]
@@ -692,11 +692,10 @@ mod tests {
 
         assert_eq!(normals.len(), 4);
 
-        for i in 0..4 {
-            let v1 = polygon.vertices[i];
-            let v2 = polygon.vertices[(i + 1) % 4];
+        let vertex_count = polygon.vertices.len();
+        for (i, (&v1, &normal)) in polygon.vertices.iter().zip(normals).take(4).enumerate() {
+            let v2 = polygon.vertices[(i + 1) % vertex_count];
             let edge = v2 - v1;
-            let normal = normals[i];
 
             // Normal is perpendicular to the edge and unit length
             assert!(approx_eq_eps(edge.dot(normal), 0.0, 1e-5));

@@ -4,12 +4,12 @@
 //! for the physics simulation.
 
 mod config;
-mod world;
+mod simulation;
 #[cfg(test)]
 mod tests;
 
 pub use config::WorldConfig;
-pub use world::World;
+pub use simulation::World;
 
 /// World utilities
 pub mod utils {

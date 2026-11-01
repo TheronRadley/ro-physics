@@ -2,6 +2,8 @@
 //!
 //! This module provides rendering functionality for visualizing the physics simulation.
 
+use std::sync::Arc;
+
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -42,7 +44,9 @@ impl Vertex {
 
 /// Renderer state
 pub struct Renderer {
-    surface: wgpu::Surface,
+    // The surface owns a clone of the window's `Arc`, so it stays valid
+    // for as long as the renderer does.
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -136,15 +140,18 @@ impl Default for DebugFlags {
 
 impl Renderer {
     /// Create a new renderer
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(window: Arc<Window>) -> Self {
         // Instance
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
 
-        // Surface
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        // Surface. Passing an `Arc<Window>` keeps the window alive for as
+        // long as the surface exists, which is what `Surface<'static>` needs.
+        let surface = instance
+            .create_surface(window.clone())
+            .expect("failed to create a surface for the window");
 
         // Adapter
         let adapter = instance
@@ -160,9 +167,9 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
                     label: None,
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
                 },
                 None,
             )
@@ -185,6 +192,7 @@ impl Renderer {
             width: size.width,
             height: size.height,
             present_mode: surface_caps.present_modes[0],
+            desired_maximum_frame_latency: 2,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
@@ -303,9 +311,7 @@ impl Renderer {
                     let transform = body.transform();
                     let shape = collider.shape();
                     
-                    if let Some(shape) = shape {
-                        self.add_shape(&shape, transform, body, collider);
-                    }
+                    self.add_shape(shape, transform, body, collider);
                 }
             }
         }
@@ -341,7 +347,7 @@ impl Renderer {
     }
 
     /// Add a shape to the render list
-    fn add_shape(&mut self, shape: &Shape, transform: Transform, body: &Body, collider: &Collider) {
+    fn add_shape(&mut self, shape: &Shape, transform: Transform, body: &Body, _collider: &Collider) {
         let color = if body.is_sleeping() && self.debug_flags.show_sleeping {
             [0.5, 0.5, 0.5] // Gray for sleeping bodies
         } else if body.is_static() {
@@ -494,6 +500,8 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
             });
 
             // Set pipeline

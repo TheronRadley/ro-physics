@@ -160,8 +160,8 @@ mod tests {
     fn test_generator_reset() {
         let mut generator = ConstraintHandleGenerator::new();
 
-        generator.generate();
-        generator.generate();
+        let _ = generator.generate();
+        let _ = generator.generate();
         generator.reset();
 
         let handle = generator.generate();

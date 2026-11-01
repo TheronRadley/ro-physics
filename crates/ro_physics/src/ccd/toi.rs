@@ -135,11 +135,11 @@ impl TimeOfImpact {
         let mut toi = 1.0;
         let mut found = false;
         
-        if t1 >= 0.0 && t1 <= 1.0 {
+        if (0.0..=1.0).contains(&t1) {
             toi = t1;
             found = true;
         }
-        if t2 >= 0.0 && t2 <= 1.0 && t2 < toi {
+        if (0.0..=1.0).contains(&t2) && t2 < toi {
             toi = t2;
             found = true;
         }

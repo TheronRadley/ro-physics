@@ -107,7 +107,4 @@ mod tests {
         (a - b).abs() <= crate::constants::EPSILON
     }
 
-    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
-        (a - b).abs() <= epsilon
-    }
 }
