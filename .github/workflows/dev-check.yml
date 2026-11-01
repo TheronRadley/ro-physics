@@ -87,6 +87,11 @@ jobs:
           cargo clippy --workspace --all-targets --all-features -- -D warnings > /tmp/logs/clippy-workspace.txt 2>&1 || true
           tail -5 /tmp/logs/clippy-workspace.txt
 
+      # The sandbox cannot run cargo, so the resolved lockfile has to come from
+      # here if it is going to be committed at all.
+      - name: Capture the resolved lockfile
+        run: cp Cargo.lock /tmp/logs/Cargo.lock
+
       - name: Publish logs
         if: always()
         run: |

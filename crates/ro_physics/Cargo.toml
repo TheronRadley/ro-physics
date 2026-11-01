@@ -6,7 +6,7 @@ rust-version = "1.70"
 authors = ["Ro-Physics Team"]
 description = "A 2D rigid-body physics engine in Rust"
 license = "MIT OR Apache-2.0"
-readme = "../../README.md"
+readme = "README.md"
 repository = "https://github.com/TheronRadley/ro-physics"
 keywords = ["physics", "2d", "rigid-body", "collision", "simulation"]
 categories = ["game-development", "simulation"]
@@ -23,6 +23,7 @@ bincode = { workspace = true, optional = true }
 [dev-dependencies]
 criterion = { workspace = true }
 approx = { workspace = true }
+proptest = { workspace = true }
 
 [features]
 default = []

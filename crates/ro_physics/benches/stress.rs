@@ -303,9 +303,52 @@ fn bench_collision(c: &mut Criterion) {
     group.finish();
 }
 
+/// How the cost of a step grows with the number of bodies
+///
+/// The bodies are laid out on a grid so that the pile does not collapse into a
+/// single stack, which would make the measurement depend on the solver rather
+/// than on the body count. Sample sizes are reduced because a single step of
+/// ten thousand bodies is already slow.
+fn bench_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("scaling/step");
+    group.sample_size(10);
+    group.measurement_time(std::time::Duration::from_secs(10));
+
+    for count in [100usize, 1_000, 10_000].iter() {
+        group.throughput(Throughput::Elements(*count as u64));
+
+        group.bench_function(format!("bodies_{}", count), |b| {
+            let config = WorldConfig::new()
+                .with_max_bodies(*count + 8)
+                .with_max_colliders(*count + 8);
+            let mut world = World::new(config.with_gravity(Vec2::new(0.0, -9.81)));
+
+            let ground = world.create_static_body(Transform::identity());
+            let _ = world.add_box(ground, Vec2::new(1.0e3, 0.5), 0.0);
+
+            for index in 0..*count {
+                let column = (index % 100) as f32;
+                let row = (index / 100) as f32;
+                let body = world.create_dynamic_body(Transform::new(
+                    Vec2::new(column * 2.0 - 100.0, row * 2.0 + 2.0),
+                    Rot2::new(0.0),
+                ));
+                let _ = world.add_circle(body, 0.5, 1.0);
+            }
+
+            b.iter(|| {
+                world.step(black_box(1.0 / 60.0));
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     stress_many_bodies,
+    bench_scaling,
     stress_high_velocity,
     stress_constraints,
     stress_polygons,
