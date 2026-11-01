@@ -244,8 +244,16 @@ impl Collider {
     }
 
     /// Set the friction
+    ///
+    /// Values outside `[0, 1]` are clamped and non-finite ones are ignored:
+    /// `f32::clamp` passes NaN straight through, and a NaN friction would turn
+    /// every tangential impulse into NaN.
     #[inline]
     pub fn set_friction(&mut self, friction: f32) {
+        if !friction.is_finite() {
+            return;
+        }
+
         self.friction = friction.clamp(0.0, 1.0);
     }
 
@@ -257,8 +265,15 @@ impl Collider {
     }
 
     /// Set the restitution
+    ///
+    /// Values outside `[0, 1]` are clamped and non-finite ones are ignored
+    /// (see [`Collider::set_friction`]).
     #[inline]
     pub fn set_restitution(&mut self, restitution: f32) {
+        if !restitution.is_finite() {
+            return;
+        }
+
         self.restitution = restitution.clamp(0.0, 1.0);
     }
 
@@ -542,6 +557,31 @@ mod tests {
         let collider_str = format!("{}", collider);
         assert!(collider_str.contains("Collider"));
         assert!(collider_str.contains("Circle"));
+    }
+
+
+    #[test]
+    fn test_material_setters_reject_non_finite_values() {
+        let mut collider = Collider::new(
+            ColliderHandle::new(1, 0),
+            BodyHandle::new(1, 0),
+            Shape::Circle(Circle::new(1.0)),
+        );
+        collider.set_friction(0.4);
+        collider.set_restitution(0.3);
+
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            collider.set_friction(bad);
+            assert_eq!(collider.friction(), 0.4);
+            collider.set_restitution(bad);
+            assert_eq!(collider.restitution(), 0.3);
+        }
+
+        // Out of range values are clamped, not stored raw
+        collider.set_friction(5.0);
+        assert_eq!(collider.friction(), 1.0);
+        collider.set_restitution(-5.0);
+        assert_eq!(collider.restitution(), 0.0);
     }
 
     // Helper function for tests

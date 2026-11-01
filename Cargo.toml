@@ -1,5 +1,8 @@
 [workspace]
 members = ["crates/*"]
+# The fuzz targets need a nightly toolchain and `cargo-fuzz`, so they live in
+# their own crate outside the workspace. See `fuzz/README.md`.
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.dependencies]

@@ -405,7 +405,12 @@ impl AabbTree {
 
     /// Detach a leaf from the tree (the node itself stays allocated)
     fn remove_leaf(&mut self, leaf: usize) {
-        debug_assert!(self.nodes[leaf].is_leaf(), "only leaves can be removed");
+        // Only leaves can be detached. This is a runtime check rather than a
+        // `debug_assert!` because in a release build removing an internal node
+        // would silently corrupt the tree and every later query with it.
+        if !self.nodes.get(leaf).is_some_and(BvhNode::is_leaf) {
+            return;
+        }
 
         if self.root == leaf {
             self.root = NULL;

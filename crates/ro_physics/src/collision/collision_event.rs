@@ -194,19 +194,19 @@ impl SimpleCollisionEventHandler {
     #[inline]
     #[must_use]
     pub fn events(&self) -> Vec<CollisionEvent> {
-        self.events.lock().unwrap().clone()
+        self.events.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
     }
 
     /// Clear all collected events
     #[inline]
     pub fn clear(&self) {
-        self.events.lock().unwrap().clear();
+        self.events.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clear();
     }
 }
 
 impl CollisionEventHandler for SimpleCollisionEventHandler {
     fn on_collision(&mut self, event: CollisionEvent) {
-        self.events.lock().unwrap().push(event);
+        self.events.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).push(event);
     }
 }
 

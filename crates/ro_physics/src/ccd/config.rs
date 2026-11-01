@@ -82,6 +82,33 @@ impl Default for CcdConfig {
     }
 }
 
+impl CcdConfig {
+    /// Replace non-finite and non-positive values with the defaults
+    ///
+    /// A zero or negative tolerance would make conservative advancement loop
+    /// forever, and a NaN one would stop it from detecting anything.
+    /// `World::new` runs this before storing the config.
+    #[inline]
+    #[must_use]
+    pub fn sanitize(mut self) -> Self {
+        let defaults = Self::default();
+
+        if !self.toi_tolerance.is_finite() || self.toi_tolerance <= 0.0 {
+            self.toi_tolerance = defaults.toi_tolerance;
+        }
+
+        if !self.max_toi.is_finite() || self.max_toi <= 0.0 {
+            self.max_toi = defaults.max_toi;
+        }
+
+        if self.max_toi_iterations == 0 {
+            self.max_toi_iterations = defaults.max_toi_iterations;
+        }
+
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

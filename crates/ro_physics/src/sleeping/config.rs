@@ -71,6 +71,33 @@ impl Default for SleepingConfig {
     }
 }
 
+impl SleepingConfig {
+    /// Replace non-finite and negative values with the defaults
+    ///
+    /// A NaN threshold would make the comparison in the sleeping test always
+    /// false, so bodies would never sleep (or never wake). `World::new` runs
+    /// this before storing the config.
+    #[inline]
+    #[must_use]
+    pub fn sanitize(mut self) -> Self {
+        let defaults = Self::default();
+
+        if !self.linear_threshold.is_finite() || self.linear_threshold < 0.0 {
+            self.linear_threshold = defaults.linear_threshold;
+        }
+
+        if !self.angular_threshold.is_finite() || self.angular_threshold < 0.0 {
+            self.angular_threshold = defaults.angular_threshold;
+        }
+
+        if !self.sleep_time.is_finite() || self.sleep_time < 0.0 {
+            self.sleep_time = defaults.sleep_time;
+        }
+
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

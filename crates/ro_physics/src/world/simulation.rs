@@ -108,6 +108,10 @@ impl World {
     #[inline]
     #[must_use]
     pub fn new(config: WorldConfig) -> Self {
+        // A hand-built config is allowed to contain nonsense; sanitising it here
+        // keeps NaN out of the simulation without making the fields private.
+        let config = config.sanitize();
+
         Self {
             broad_phase: BroadPhase::new(BroadPhaseConfig::new(config.max_colliders)),
             narrow_phase: NarrowPhase::new(NarrowPhaseConfig::default()),
@@ -161,7 +165,10 @@ impl World {
     /// Set the gravity vector
     #[inline]
     pub fn set_gravity(&mut self, gravity: Vec2) {
-        self.config.gravity = gravity;
+        // A non-finite gravity reaches every dynamic body on the next step.
+        if gravity.is_finite() {
+            self.config.gravity = gravity;
+        }
     }
 
     /// Get the current simulation time
@@ -223,6 +230,12 @@ impl World {
     #[inline]
     #[must_use]
     pub fn create_body(&mut self, body_type: BodyType, transform: Transform) -> BodyHandle {
+        // A body at a non-finite position cannot be represented by any
+        // spatial index, so it is refused rather than stored.
+        if !transform.is_finite() {
+            return BodyHandle::null();
+        }
+
         let index = match self.free_body_slots.pop() {
             Some(index) => index,
             None => {
@@ -492,6 +505,13 @@ impl World {
         half_extents: Vec2,
         density: f32,
     ) -> ColliderHandle {
+        // `box_vertices` normalises negative extents, but `abs`/`max` swallow
+        // NaN, so a non-finite half extent has to be refused here or it would
+        // silently become a sliver of a box.
+        if !half_extents.is_finite() {
+            return ColliderHandle::null();
+        }
+
         let Ok(polygon) = Polygon::try_new(box_vertices(half_extents)) else {
             return ColliderHandle::null();
         };
@@ -519,6 +539,12 @@ impl World {
     #[inline]
     #[must_use]
     fn add_shape(&mut self, body_handle: BodyHandle, shape: Shape, density: f32) -> ColliderHandle {
+        // A NaN density makes the body's mass NaN, and a negative one gives it
+        // negative mass.
+        if !density.is_finite() || density < 0.0 {
+            return ColliderHandle::null();
+        }
+
         let handle = self.create_collider(body_handle, shape);
         if handle.is_null() {
             return handle;

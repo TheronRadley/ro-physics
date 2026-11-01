@@ -112,6 +112,34 @@ pub mod utils {
         x.is_finite()
     }
 
+    /// Keep a non-finite value out of the simulation state
+    ///
+    /// A single NaN or infinity reaching a body spreads through the solver and
+    /// destroys the whole world, so public setters drop them and keep the
+    /// previous value instead of poisoning everything downstream.
+    #[inline]
+    #[must_use]
+    pub fn finite_or(value: f32, fallback: f32) -> f32 {
+        if value.is_finite() {
+            value
+        } else {
+            fallback
+        }
+    }
+
+    /// Keep a non-finite vector out of the simulation state
+    ///
+    /// See [`finite_or`].
+    #[inline]
+    #[must_use]
+    pub fn finite_vec2_or(value: Vec2, fallback: Vec2) -> Vec2 {
+        if value.is_finite() {
+            value
+        } else {
+            fallback
+        }
+    }
+
     /// Check if a value is NaN
     #[inline]
     #[must_use]

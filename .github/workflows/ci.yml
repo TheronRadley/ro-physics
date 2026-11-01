@@ -64,6 +64,19 @@ jobs:
           cd crates/ro_physics
           cargo bench --all-features
 
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Fails on crates with known security advisories (RUSTSEC database).
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest

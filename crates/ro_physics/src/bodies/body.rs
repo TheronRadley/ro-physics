@@ -6,6 +6,7 @@
 use std::fmt;
 
 use super::{BodyHandle, BodyType};
+use crate::math::utils::{finite_or, finite_vec2_or};
 use crate::math::{Rot2, Transform, Vec2};
 
 /// A rigid body in the physics simulation.
@@ -169,24 +170,35 @@ impl Body {
     }
 
     /// Set the position
+    ///
+    /// Non-finite positions are ignored: they would put the body somewhere no
+    /// broad-phase structure can represent.
     #[inline]
     pub fn set_position(&mut self, position: Vec2) {
-        self.transform.position = position;
+        self.transform.position = finite_vec2_or(position, self.transform.position);
         self.wake_up();
     }
 
     /// Set the rotation
+    ///
+    /// Non-finite rotations are ignored.
     #[inline]
     pub fn set_rotation(&mut self, rotation: Rot2) {
-        self.transform.rotation = rotation;
-        self.wake_up();
+        if rotation.is_finite() {
+            self.transform.rotation = rotation;
+            self.wake_up();
+        }
     }
 
     /// Set the transform
+    ///
+    /// Non-finite transforms are ignored.
     #[inline]
     pub fn set_transform(&mut self, transform: Transform) {
-        self.transform = transform;
-        self.wake_up();
+        if transform.is_finite() {
+            self.transform = transform;
+            self.wake_up();
+        }
     }
 
     /// Get the linear velocity
@@ -197,9 +209,11 @@ impl Body {
     }
 
     /// Set the linear velocity
+    ///
+    /// Non-finite velocities are ignored.
     #[inline]
     pub fn set_linear_velocity(&mut self, velocity: Vec2) {
-        self.linear_velocity = velocity;
+        self.linear_velocity = finite_vec2_or(velocity, self.linear_velocity);
         self.wake_up();
     }
 
@@ -211,9 +225,11 @@ impl Body {
     }
 
     /// Set the angular velocity
+    ///
+    /// Non-finite velocities are ignored.
     #[inline]
     pub fn set_angular_velocity(&mut self, velocity: f32) {
-        self.angular_velocity = velocity;
+        self.angular_velocity = finite_or(velocity, self.angular_velocity);
         self.wake_up();
     }
 
@@ -306,8 +322,14 @@ impl Body {
     }
 
     /// Set the mass properties
+    ///
+    /// Non-finite values are ignored (the previous ones are kept): a NaN mass
+    /// would turn every later impulse into NaN.
     #[inline]
     pub fn set_mass_properties(&mut self, mass: f32, inertia: f32) {
+        let mass = finite_or(mass, self.mass).max(0.0);
+        let inertia = finite_or(inertia, self.inertia).max(0.0);
+
         self.mass = mass;
         self.inv_mass = if mass > 0.0 { 1.0 / mass } else { 0.0 };
         self.inertia = inertia;
@@ -348,9 +370,11 @@ impl Body {
     }
 
     /// Set the gravity scale
+    ///
+    /// Non-finite scales are ignored.
     #[inline]
     pub fn set_gravity_scale(&mut self, scale: f32) {
-        self.gravity_scale = scale;
+        self.gravity_scale = finite_or(scale, self.gravity_scale);
     }
 
     /// Check if the body is enabled
@@ -415,40 +439,62 @@ impl Body {
     }
 
     /// Add a force to the body
+    ///
+    /// Non-finite forces are ignored.
     #[inline]
     pub fn add_force(&mut self, force: Vec2) {
+        if !force.is_finite() {
+            return;
+        }
+
         self.force += force;
         self.wake_up();
     }
 
     /// Add a force at a point to the body
+    ///
+    /// Non-finite forces or points are ignored.
     #[inline]
     pub fn add_force_at_point(&mut self, force: Vec2, point: Vec2) {
+        if !force.is_finite() || !point.is_finite() {
+            return;
+        }
+
         self.force += force;
         self.torque += (point - self.transform.position).cross(force);
         self.wake_up();
     }
 
     /// Add a torque to the body
+    ///
+    /// Non-finite torques are ignored.
     #[inline]
     pub fn add_torque(&mut self, torque: f32) {
+        if !torque.is_finite() {
+            return;
+        }
+
         self.torque += torque;
         self.wake_up();
     }
 
     /// Add an impulse to the body
+    ///
+    /// Non-finite impulses are ignored.
     #[inline]
     pub fn add_impulse(&mut self, impulse: Vec2) {
-        if self.is_dynamic() {
+        if self.is_dynamic() && impulse.is_finite() {
             self.linear_velocity += impulse * self.inv_mass;
             self.wake_up();
         }
     }
 
     /// Add an impulse at a point to the body
+    ///
+    /// Non-finite impulses or points are ignored.
     #[inline]
     pub fn add_impulse_at_point(&mut self, impulse: Vec2, point: Vec2) {
-        if self.is_dynamic() {
+        if self.is_dynamic() && impulse.is_finite() && point.is_finite() {
             self.linear_velocity += impulse * self.inv_mass;
             let r = point - self.transform.position;
             self.angular_velocity += r.cross(impulse) * self.inv_inertia;
@@ -457,9 +503,11 @@ impl Body {
     }
 
     /// Add an angular impulse to the body
+    ///
+    /// Non-finite impulses are ignored.
     #[inline]
     pub fn add_angular_impulse(&mut self, impulse: f32) {
-        if self.is_dynamic() {
+        if self.is_dynamic() && impulse.is_finite() {
             self.angular_velocity += impulse * self.inv_inertia;
             self.wake_up();
         }
@@ -996,5 +1044,63 @@ mod tests {
         let body_str = format!("{}", body);
         assert!(body_str.contains("Body"));
         assert!(body_str.contains("Dynamic"));
+    }
+
+
+    #[test]
+    fn test_setters_reject_non_finite_values() {
+        let mut body = Body::new_dynamic(BodyHandle::new(1, 0));
+        body.set_position(Vec2::new(1.0, 2.0));
+        body.set_linear_velocity(Vec2::new(3.0, 4.0));
+        body.set_angular_velocity(0.5);
+        body.set_mass_properties(2.0, 3.0);
+
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            body.set_position(Vec2::new(bad, bad));
+            assert_eq!(body.position(), Vec2::new(1.0, 2.0));
+
+            body.set_linear_velocity(Vec2::new(bad, 0.0));
+            assert_eq!(body.linear_velocity(), Vec2::new(3.0, 4.0));
+
+            body.set_angular_velocity(bad);
+            assert_eq!(body.angular_velocity(), 0.5);
+
+            body.set_transform(Transform::new(Vec2::new(bad, 0.0), Rot2::identity()));
+            assert_eq!(body.position(), Vec2::new(1.0, 2.0));
+
+            body.set_rotation(Rot2::new(bad));
+            assert!(body.rotation().is_finite());
+
+            body.set_mass_properties(bad, bad);
+            assert_eq!(body.mass(), 2.0);
+            assert_eq!(body.inertia(), 3.0);
+
+            body.add_force(Vec2::new(bad, 0.0));
+            body.add_force_at_point(Vec2::new(1.0, 0.0), Vec2::new(bad, 0.0));
+            body.add_torque(bad);
+            assert_eq!(body.force(), Vec2::zero());
+            assert_eq!(body.torque(), 0.0);
+
+            body.add_impulse(Vec2::new(bad, 0.0));
+            body.add_impulse_at_point(Vec2::new(1.0, 0.0), Vec2::new(bad, 0.0));
+            body.add_angular_impulse(bad);
+            assert_eq!(body.linear_velocity(), Vec2::new(3.0, 4.0));
+            assert_eq!(body.angular_velocity(), 0.5);
+        }
+
+        // Finite values still get through
+        body.set_position(Vec2::new(10.0, 20.0));
+        assert_eq!(body.position(), Vec2::new(10.0, 20.0));
+    }
+
+    #[test]
+    fn test_mass_properties_reject_negative_values() {
+        let mut body = Body::new_dynamic(BodyHandle::new(1, 0));
+        body.set_mass_properties(-1.0, -2.0);
+
+        assert_eq!(body.mass(), 0.0);
+        assert_eq!(body.inv_mass(), 0.0);
+        assert_eq!(body.inertia(), 0.0);
+        assert_eq!(body.inv_inertia(), 0.0);
     }
 }
