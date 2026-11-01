@@ -334,7 +334,7 @@ impl World {
         self.bodies
             .iter()
             .flatten()
-            .map(|body| body.handle())
+            .map(Body::handle)
             .collect()
     }
 
@@ -446,7 +446,7 @@ impl World {
         self.colliders
             .iter()
             .flatten()
-            .map(|collider| collider.handle())
+            .map(Collider::handle)
             .collect()
     }
 

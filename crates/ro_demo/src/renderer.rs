@@ -94,11 +94,18 @@ impl Camera {
     }
 
     /// Get the view projection matrix
+    ///
+    /// `scale` is the half-height of the view in world units, so zooming in
+    /// means making it smaller. This matches what the renderer does to its
+    /// vertices on the CPU.
     #[must_use]
     pub fn get_view_projection(&self, width: f32, height: f32) -> [[f32; 4]; 4] {
+        let scale = self.scale.abs().max(f32::EPSILON);
+        let aspect = (width / height).abs().max(f32::EPSILON);
+
         // 2D orthographic projection
-        let scale_x = 2.0 / width * self.scale;
-        let scale_y = 2.0 / height * self.scale;
+        let scale_x = 1.0 / (scale * aspect);
+        let scale_y = 1.0 / scale;
 
         let translate_x = -self.position.x * scale_x;
         let translate_y = -self.position.y * scale_y;
@@ -276,6 +283,55 @@ impl Renderer {
         }
     }
 
+    /// Push a vertex in world space, applying the camera
+    ///
+    /// The pipeline has no uniform buffer yet, so the view transform is
+    /// folded into the vertices on the CPU: `scale` is the half-height of
+    /// the view in world units, and the width follows from the aspect
+    /// ratio.
+    fn push_vertex(&mut self, world_x: f32, world_y: f32, color: [f32; 3]) {
+        let width = self.size.width.max(1) as f32;
+        let height = self.size.height.max(1) as f32;
+        let aspect = width / height;
+
+        let scale_x = 1.0 / (self.camera.scale.abs().max(f32::EPSILON) * aspect);
+        let scale_y = 1.0 / self.camera.scale.abs().max(f32::EPSILON);
+
+        self.vertices.push(Vertex {
+            position: [
+                (world_x - self.camera.position.x) * scale_x,
+                (world_y - self.camera.position.y) * scale_y,
+                0.0,
+            ],
+            color,
+        });
+    }
+
+    /// Push a line segment in world space (drawn as two triangles)
+    fn push_line(&mut self, from: Vec2, to: Vec2, color: [f32; 3], thickness: f32) {
+        let direction = to - from;
+        let length = direction.length();
+        if length <= f32::EPSILON {
+            return;
+        }
+
+        let along = direction / length;
+        let across = Vec2::new(-along.y, along.x) * (thickness * 0.5);
+
+        let start_idx = self.vertices.len() as u16;
+        for corner in [from + across, from - across, to - across, to + across] {
+            self.push_vertex(corner.x, corner.y, color);
+        }
+
+        self.indices.push(start_idx);
+        self.indices.push(start_idx + 1);
+        self.indices.push(start_idx + 2);
+
+        self.indices.push(start_idx);
+        self.indices.push(start_idx + 2);
+        self.indices.push(start_idx + 3);
+    }
+
     /// Resize the renderer
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
@@ -325,6 +381,48 @@ impl Renderer {
             }
         }
 
+        // Draw a short arrow for every moving body
+        if self.debug_flags.show_velocities {
+            let thickness = 0.02 * self.camera.scale;
+            for handle in world.body_handles() {
+                let Some(body) = world.get_body(handle) else {
+                    continue;
+                };
+
+                let velocity = body.linear_velocity();
+                if velocity.length_squared() <= 1.0e-6 {
+                    continue;
+                }
+
+                let from = body.position();
+                self.push_line(from, from + velocity * 0.25, [1.0, 1.0, 0.0], thickness);
+            }
+        }
+
+        // Mark every contact point with a small cross
+        if self.debug_flags.show_contacts {
+            let thickness = 0.02 * self.camera.scale;
+            let arm = 0.05 * self.camera.scale;
+            for manifold in world.manifolds() {
+                for contact in manifold.contacts() {
+                    let point = contact.position();
+                    let colour = [1.0, 0.0, 1.0];
+                    self.push_line(
+                        point - Vec2::new(arm, arm),
+                        point + Vec2::new(arm, arm),
+                        colour,
+                        thickness,
+                    );
+                    self.push_line(
+                        point - Vec2::new(arm, -arm),
+                        point + Vec2::new(arm, -arm),
+                        colour,
+                        thickness,
+                    );
+                }
+            }
+        }
+
         // Upload to GPU
         if !self.vertices.is_empty() {
             self.vertex_buffer =
@@ -355,6 +453,10 @@ impl Renderer {
         body: &Body,
         _collider: &Collider,
     ) {
+        if !self.debug_flags.show_colliders {
+            return;
+        }
+
         let color = if body.is_sleeping() && self.debug_flags.show_sleeping {
             [0.5, 0.5, 0.5] // Gray for sleeping bodies
         } else if body.is_static() {
@@ -383,10 +485,7 @@ impl Renderer {
         let start_idx = self.vertices.len() as u16;
 
         // Center vertex
-        self.vertices.push(Vertex {
-            position: [transform.position.x, transform.position.y, 0.0],
-            color,
-        });
+        self.push_vertex(transform.position.x, transform.position.y, color);
 
         // Circle vertices
         for i in 0..=segments {
@@ -398,14 +497,11 @@ impl Renderer {
             let rotated_x = x * transform.rotation.cos() - y * transform.rotation.sin();
             let rotated_y = x * transform.rotation.sin() + y * transform.rotation.cos();
 
-            self.vertices.push(Vertex {
-                position: [
-                    transform.position.x + rotated_x,
-                    transform.position.y + rotated_y,
-                    0.0,
-                ],
+            self.push_vertex(
+                transform.position.x + rotated_x,
+                transform.position.y + rotated_y,
                 color,
-            });
+            );
         }
 
         // Triangles (fan from center)
@@ -429,14 +525,11 @@ impl Renderer {
             let rotated_y =
                 vertex.x * transform.rotation.sin() + vertex.y * transform.rotation.cos();
 
-            self.vertices.push(Vertex {
-                position: [
-                    transform.position.x + rotated_x,
-                    transform.position.y + rotated_y,
-                    0.0,
-                ],
+            self.push_vertex(
+                transform.position.x + rotated_x,
+                transform.position.y + rotated_y,
                 color,
-            });
+            );
         }
 
         // Add indices for triangle fan
@@ -452,22 +545,10 @@ impl Renderer {
         let start_idx = self.vertices.len() as u16;
 
         // AABB vertices (4 corners)
-        self.vertices.push(Vertex {
-            position: [aabb.min.x, aabb.min.y, 0.0],
-            color,
-        });
-        self.vertices.push(Vertex {
-            position: [aabb.max.x, aabb.min.y, 0.0],
-            color,
-        });
-        self.vertices.push(Vertex {
-            position: [aabb.max.x, aabb.max.y, 0.0],
-            color,
-        });
-        self.vertices.push(Vertex {
-            position: [aabb.min.x, aabb.max.y, 0.0],
-            color,
-        });
+        self.push_vertex(aabb.min.x, aabb.min.y, color);
+        self.push_vertex(aabb.max.x, aabb.min.y, color);
+        self.push_vertex(aabb.max.x, aabb.max.y, color);
+        self.push_vertex(aabb.min.x, aabb.max.y, color);
 
         // Two triangles for the AABB
         self.indices.push(start_idx);
@@ -534,31 +615,3 @@ impl Renderer {
         Ok(())
     }
 }
-
-/// Shader source (WGSL)
-pub const SHADER_SOURCE: &str = r#"
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) color: vec3<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec3<f32>,
-};
-
-@vertex
-fn vs_main(
-    model: VertexInput,
-) -> VertexOutput {
-    var out: VertexOutput;
-    out.clip_position = vec4<f32>(model.position, 1.0);
-    out.color = model.color;
-    return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(in.color, 1.0);
-}
-"#;

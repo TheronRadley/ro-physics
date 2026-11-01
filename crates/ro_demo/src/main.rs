@@ -26,8 +26,6 @@ struct DemoApp {
     world: World,
     /// Renderer
     renderer: Option<Renderer>,
-    /// Last frame time
-    last_frame_time: Instant,
     /// Frame counter
     frame_count: u64,
     /// Current FPS
@@ -70,7 +68,6 @@ impl DemoApp {
         Self {
             world,
             renderer: None,
-            last_frame_time: Instant::now(),
             frame_count: 0,
             fps: 0.0,
             last_fps_update: Instant::now(),
@@ -80,7 +77,7 @@ impl DemoApp {
             single_step: false,
             debug_flags: DebugFlags::default(),
             camera: Camera::default(),
-            zoom: 1.0,
+            zoom: 12.0,
             camera_target: Vec2::zero(),
         }
     }
@@ -179,16 +176,16 @@ impl DemoApp {
                 self.zoom /= 1.1;
             }
             winit::keyboard::KeyCode::ArrowUp => {
-                self.camera_target.y += 0.5 / self.zoom;
+                self.camera_target.y += 0.1 * self.zoom;
             }
             winit::keyboard::KeyCode::ArrowDown => {
-                self.camera_target.y -= 0.5 / self.zoom;
+                self.camera_target.y -= 0.1 * self.zoom;
             }
             winit::keyboard::KeyCode::ArrowLeft => {
-                self.camera_target.x -= 0.5 / self.zoom;
+                self.camera_target.x -= 0.1 * self.zoom;
             }
             winit::keyboard::KeyCode::ArrowRight => {
-                self.camera_target.x += 0.5 / self.zoom;
+                self.camera_target.x += 0.1 * self.zoom;
             }
             winit::keyboard::KeyCode::Escape => {
                 // Quit
