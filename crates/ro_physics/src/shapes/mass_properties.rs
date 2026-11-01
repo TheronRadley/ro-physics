@@ -3,6 +3,7 @@
 //! This module provides mass, inertia, and center of mass calculations
 //! for various shape types.
 
+use crate::math::utils::approx_eq;
 use crate::math::Vec2;
 
 /// Mass properties for a shape.
