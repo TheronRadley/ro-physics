@@ -9,7 +9,10 @@ use crate::collision::ColliderHandle;
 
 /// Type of collision event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum CollisionEventType {
     /// Collision started (bodies just touched)
     Started,
@@ -17,6 +20,29 @@ pub enum CollisionEventType {
     Persisted,
     /// Collision ended (bodies separated)
     Ended,
+}
+
+impl CollisionEventType {
+    /// Check if this type is [`CollisionEventType::Started`]
+    #[inline]
+    #[must_use]
+    pub const fn is_start(self) -> bool {
+        matches!(self, Self::Started)
+    }
+
+    /// Check if this type is [`CollisionEventType::Persisted`]
+    #[inline]
+    #[must_use]
+    pub const fn is_persist(self) -> bool {
+        matches!(self, Self::Persisted)
+    }
+
+    /// Check if this type is [`CollisionEventType::Ended`]
+    #[inline]
+    #[must_use]
+    pub const fn is_end(self) -> bool {
+        matches!(self, Self::Ended)
+    }
 }
 
 impl fmt::Display for CollisionEventType {
@@ -33,7 +59,10 @@ impl fmt::Display for CollisionEventType {
 ///
 /// Contains information about a collision between two bodies.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct CollisionEvent {
     /// Type of collision event
     pub event_type: CollisionEventType,
@@ -165,19 +194,28 @@ impl SimpleCollisionEventHandler {
     #[inline]
     #[must_use]
     pub fn events(&self) -> Vec<CollisionEvent> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Clear all collected events
     #[inline]
     pub fn clear(&self) {
-        self.events.lock().unwrap().clear();
+        self.events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
     }
 }
 
 impl CollisionEventHandler for SimpleCollisionEventHandler {
     fn on_collision(&mut self, event: CollisionEvent) {
-        self.events.lock().unwrap().push(event);
+        self.events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(event);
     }
 }
 
@@ -260,7 +298,7 @@ mod tests {
     #[test]
     fn test_simple_handler() {
         let mut handler = SimpleCollisionEventHandler::new();
-        
+
         let event = CollisionEvent::new(
             CollisionEventType::Started,
             BodyHandle::new(1, 0),
@@ -272,7 +310,7 @@ mod tests {
         );
 
         handler.on_collision(event);
-        
+
         let events = handler.events();
         assert_eq!(events.len(), 1);
         assert!(events[0].is_start());

@@ -89,7 +89,7 @@ impl Bvh {
         self.sort_along_axis(&mut indices, 0);
 
         // Recursively build the tree
-        self.root = Some(self.build_node(&indices, 0));
+        self.root = Some(self.build_node(&indices));
     }
 
     /// Sort indices along a given axis
@@ -97,12 +97,14 @@ impl Bvh {
         indices.sort_by(|&a, &b| {
             let a_center = self.collider_aabbs[a].center();
             let b_center = self.collider_aabbs[b].center();
-            a_center[axis].partial_cmp(&b_center[axis]).unwrap()
+            // `total_cmp` gives a total order for floats, so NaN can never
+            // panic here the way `partial_cmp(..).unwrap()` would.
+            axis_value(a_center, axis).total_cmp(&axis_value(b_center, axis))
         });
     }
 
     /// Build a BVH node from a range of indices
-    fn build_node(&mut self, indices: &[usize], depth: usize) -> usize {
+    fn build_node(&mut self, indices: &[usize]) -> usize {
         if indices.len() == 1 {
             // Leaf node
             let node = BvhNode {
@@ -131,12 +133,12 @@ impl Bvh {
         // Calculate combined AABB
         let mut aabb = Aabb::invalid();
         for &idx in &sorted_indices {
-            aabb = aabb.combine(&self.collider_aabbs[idx]);
+            aabb = aabb.union(self.collider_aabbs[idx]);
         }
 
         // Build children
-        let left_child = self.build_node(left_indices, depth + 1);
-        let right_child = self.build_node(right_indices, depth + 1);
+        let left_child = self.build_node(left_indices);
+        let right_child = self.build_node(right_indices);
 
         let node = BvhNode {
             aabb,
@@ -160,8 +162,8 @@ impl Bvh {
 
             for &idx in indices {
                 let center = self.collider_aabbs[idx].center();
-                min_val = min_val.min(center[axis]);
-                max_val = max_val.max(center[axis]);
+                min_val = min_val.min(axis_value(center, axis));
+                max_val = max_val.max(axis_value(center, axis));
             }
 
             let span = max_val - min_val;
@@ -273,7 +275,7 @@ impl Bvh {
         let node = &self.nodes[node_idx];
 
         // Check if AABBs overlap
-        if !node.aabb.overlaps(&aabb) {
+        if !node.aabb.overlaps(aabb) {
             return;
         }
 
@@ -311,7 +313,7 @@ impl Bvh {
         }
 
         // Sort by distance
-        results.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+        results.sort_by(|a, b| a.2.total_cmp(&b.2));
         results
     }
 
@@ -371,7 +373,7 @@ impl Bvh {
     pub fn rebuild(&mut self) {
         if !self.collider_aabbs.is_empty() {
             let indices: Vec<usize> = (0..self.collider_aabbs.len()).collect();
-            self.root = Some(self.build_node(&indices, 0));
+            self.root = Some(self.build_node(&indices));
         } else {
             self.root = None;
         }
@@ -398,17 +400,36 @@ impl fmt::Display for Bvh {
 /// Calculate intersection between a ray and an AABB
 ///
 /// Returns Some((t_min, t_max)) if there's an intersection, None otherwise
+///
+/// Read one component of a vector (0 -> x, anything else -> y)
+/// `Vec2` does not implement `Index`, so spatial code has to go through this
+/// helper instead of indexing with a dynamic axis.
 #[inline]
-#[must_use]
+fn axis_value(v: Vec2, axis: usize) -> f32 {
+    if axis == 0 {
+        v.x
+    } else {
+        v.y
+    }
+}
+
 fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f32, f32)> {
     use crate::constants::EPSILON;
 
     let inv_direction = Vec2::new(
-        if direction.x.abs() > EPSILON { 1.0 / direction.x } else { f32::INFINITY },
-        if direction.y.abs() > EPSILON { 1.0 / direction.y } else { f32::INFINITY },
+        if direction.x.abs() > EPSILON {
+            1.0 / direction.x
+        } else {
+            f32::INFINITY
+        },
+        if direction.y.abs() > EPSILON {
+            1.0 / direction.y
+        } else {
+            f32::INFINITY
+        },
     );
 
-    let mut t_min = 0.0;
+    let mut t_min: f32 = 0.0;
     let mut t_max = f32::INFINITY;
 
     // X-axis
@@ -433,8 +454,8 @@ fn ray_aabb_intersection(origin: Vec2, direction: Vec2, aabb: Aabb) -> Option<(f
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collision::ColliderHandle;
     use crate::bodies::BodyHandle;
+    use crate::collision::ColliderHandle;
 
     #[test]
     fn test_bvh_construction() {
@@ -479,15 +500,9 @@ mod tests {
             Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
         ];
 
-        let handles = vec![
-            ColliderHandle::new(1, 0),
-            ColliderHandle::new(2, 0),
-        ];
+        let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
 
-        let body_handles = vec![
-            BodyHandle::new(1, 0),
-            BodyHandle::new(2, 0),
-        ];
+        let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
         let mut bvh = Bvh::new();
         bvh.build(aabbs, handles, body_handles);
@@ -514,15 +529,9 @@ mod tests {
             Aabb::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0)),
         ];
 
-        let handles = vec![
-            ColliderHandle::new(1, 0),
-            ColliderHandle::new(2, 0),
-        ];
+        let handles = vec![ColliderHandle::new(1, 0), ColliderHandle::new(2, 0)];
 
-        let body_handles = vec![
-            BodyHandle::new(1, 0),
-            BodyHandle::new(2, 0),
-        ];
+        let body_handles = vec![BodyHandle::new(1, 0), BodyHandle::new(2, 0)];
 
         let mut bvh = Bvh::new();
         bvh.build(aabbs, handles, body_handles);
@@ -562,7 +571,7 @@ mod tests {
         let direction = Vec2::new(1.0, 0.0);
         let result = ray_aabb_intersection(origin, direction, aabb);
         assert!(result.is_some());
-        let (t_min, t_max) = result.unwrap();
+        let (t_min, _) = result.unwrap();
         assert!(t_min <= 0.0);
     }
 

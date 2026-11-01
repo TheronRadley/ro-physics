@@ -9,7 +9,10 @@ use crate::solver::SolverConfig;
 
 /// Configuration for the physics world.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct WorldConfig {
     /// Gravity vector
     pub gravity: Vec2,
@@ -42,10 +45,34 @@ impl WorldConfig {
     }
 
     /// Set the gravity vector
+    ///
+    /// A non-finite gravity is ignored: the previous value is kept rather than
+    /// letting NaN spread through every body on the next step.
     #[inline]
     #[must_use]
     pub fn with_gravity(mut self, gravity: Vec2) -> Self {
-        self.gravity = gravity;
+        if gravity.is_finite() {
+            self.gravity = gravity;
+        }
+        self
+    }
+
+    /// Replace non-finite and out-of-range values with the defaults
+    ///
+    /// Every field of this struct is public, so a config can be built by hand
+    /// with values that would poison the simulation (a NaN gravity, a negative
+    /// sleeping threshold, a zero CCD tolerance). `World::new` runs this before
+    /// storing the config, so a hand-built configuration cannot break a world.
+    #[must_use]
+    pub fn sanitize(mut self) -> Self {
+        if !self.gravity.is_finite() {
+            self.gravity = Vec2::zero();
+        }
+
+        self.solver_config = self.solver_config.sanitize();
+        self.sleeping_config = self.sleeping_config.sanitize();
+        self.ccd_config = self.ccd_config.sanitize();
+
         self
     }
 

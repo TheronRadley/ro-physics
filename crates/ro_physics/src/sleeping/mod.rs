@@ -33,13 +33,6 @@ impl SleepingSystem {
         }
     }
 
-    /// Create a new sleeping system with default configuration
-    #[inline]
-    #[must_use]
-    pub fn default() -> Self {
-        Self::new(SleepingConfig::default())
-    }
-
     /// Get the configuration
     #[inline]
     #[must_use]
@@ -60,7 +53,7 @@ impl SleepingSystem {
     /// Set if a body is sleeping
     #[inline]
     pub fn set_sleeping(&mut self, handle: BodyHandle, sleeping: bool) {
-        let state = self.sleeping.entry(handle).or_insert_with(|| SleepState::new());
+        let state = self.sleeping.entry(handle).or_default();
         state.sleeping = sleeping;
         if !sleeping {
             state.sleep_timer = 0.0;
@@ -74,9 +67,18 @@ impl SleepingSystem {
     }
 
     /// Update the sleeping state for a body
+    ///
+    /// `dt` is the timestep of the update, so the sleep timer accumulates real
+    /// seconds instead of assuming a fixed frame rate.
     #[inline]
-    pub fn update_body(&mut self, handle: BodyHandle, linear_velocity: Vec2, angular_velocity: f32) {
-        let state = self.sleeping.entry(handle).or_insert_with(|| SleepState::new());
+    pub fn update_body(
+        &mut self,
+        handle: BodyHandle,
+        linear_velocity: Vec2,
+        angular_velocity: f32,
+        dt: f32,
+    ) {
+        let state = self.sleeping.entry(handle).or_default();
 
         // Check if the body is moving
         let speed_squared = linear_velocity.length_squared();
@@ -89,9 +91,9 @@ impl SleepingSystem {
             state.sleeping = false;
             state.sleep_timer = 0.0;
         } else if !state.sleeping {
-            // Body is not moving, increment sleep timer
-            state.sleep_timer += 1.0 / 60.0; // Assuming 60 FPS
-            
+            // Body is not moving, advance the sleep timer
+            state.sleep_timer += dt.max(0.0);
+
             // Check if we should sleep
             if state.sleep_timer >= self.config.sleep_time {
                 state.sleeping = true;
@@ -117,7 +119,7 @@ impl SleepingSystem {
 
 impl Default for SleepingSystem {
     fn default() -> Self {
-        Self::default()
+        Self::new(SleepingConfig::default())
     }
 }
 
@@ -185,24 +187,26 @@ mod tests {
                 .with_sleep_time(1.0),
         );
 
+        const STEP: f32 = 1.0 / 60.0;
         let handle = BodyHandle::new(1, 0);
 
         // Body is moving
-        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0);
+        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0, STEP);
         assert!(!system.is_sleeping(handle));
 
-        // Body is not moving, but sleep timer not expired
-        for _ in 0..59 {
-            system.update_body(handle, Vec2::zero(), 0.0);
+        // Body is not moving: it takes a full second of rest to fall asleep.
+        // The timer accumulates floating point values, so allow one extra step.
+        let mut steps = 0;
+        while !system.is_sleeping(handle) && steps < 120 {
+            system.update_body(handle, Vec2::zero(), 0.0, STEP);
+            steps += 1;
         }
-        assert!(!system.is_sleeping(handle));
 
-        // Body is not moving, sleep timer expired
-        system.update_body(handle, Vec2::zero(), 0.0);
+        assert!((60..=61).contains(&steps), "slept after {steps} steps");
         assert!(system.is_sleeping(handle));
 
         // Body starts moving again
-        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0);
+        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0, STEP);
         assert!(!system.is_sleeping(handle));
     }
 

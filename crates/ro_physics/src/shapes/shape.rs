@@ -5,13 +5,16 @@
 
 use std::fmt;
 
-use crate::math::{Rot2, Transform, Vec2};
 use crate::geometry::Aabb;
+use crate::math::{Transform, Vec2};
 use crate::shapes::{Circle, MassProperties, Polygon};
 
 /// Type of shape
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum ShapeType {
     /// Circle shape
     Circle,
@@ -30,7 +33,10 @@ impl fmt::Display for ShapeType {
 
 /// Enum representing any shape type
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum Shape {
     /// Circle shape variant
     Circle(Circle),
@@ -116,7 +122,7 @@ impl Shape {
     /// Calculate the AABB for the shape at a given transform
     #[inline]
     #[must_use]
-    pub fn aabb(self, transform: Transform) -> Aabb {
+    pub fn aabb(&self, transform: Transform) -> Aabb {
         match self {
             Shape::Circle(c) => c.aabb(transform.position),
             Shape::Polygon(p) => p.aabb(transform),
@@ -142,9 +148,9 @@ impl Shape {
     pub fn closest_point(&self, point: Vec2, transform: Transform) -> Vec2 {
         match self {
             Shape::Circle(c) => {
-                let local_point = point - transform.position;
-                let closest_local = c.closest_point(point, transform.position);
-                transform.transform_point(closest_local)
+                // A circle is symmetric about its centre, so the closest point
+                // can be computed directly in world space.
+                c.closest_point(point, transform.position)
             }
             Shape::Polygon(p) => {
                 let local_point = transform.inverse_transform_point(point);
@@ -222,7 +228,7 @@ impl Shape {
     #[must_use]
     pub fn clone_box(&self) -> Box<dyn ShapeTrait> {
         match self {
-            Shape::Circle(c) => Box::new(c.clone()),
+            Shape::Circle(c) => Box::new(*c),
             Shape::Polygon(p) => Box::new(p.clone()),
         }
     }
@@ -300,9 +306,9 @@ impl ShapeTrait for Circle {
     }
 
     fn closest_point(&self, point: Vec2, transform: Transform) -> Vec2 {
-        let local_point = point - transform.position;
-        let closest_local = self.closest_point(point, transform.position);
-        transform.transform_point(closest_local)
+        // A circle is centred on the transform origin, so the closest point is
+        // already expressed in world space.
+        self.closest_point(point, transform.position)
     }
 
     fn mass_properties(&self, density: f32) -> MassProperties {
@@ -330,7 +336,7 @@ impl ShapeTrait for Circle {
     }
 
     fn clone_box(&self) -> Box<dyn ShapeTrait> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
@@ -498,7 +504,7 @@ mod tests {
         let polygon = Shape::Polygon(Polygon::from_rectangle(2.0, 2.0));
 
         let circle_area = circle.area();
-        assert!(approx_eq(circle_area, 78.53981633974483));
+        assert!(approx_eq(circle_area, 25.0 * std::f32::consts::PI));
 
         let polygon_area = polygon.area();
         assert!(approx_eq(polygon_area, 4.0));
@@ -530,7 +536,7 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
-        (a - b).abs() <= epsilon
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
     }
 }

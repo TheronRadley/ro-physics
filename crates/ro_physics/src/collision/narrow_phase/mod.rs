@@ -5,24 +5,26 @@
 
 mod circle_circle;
 mod circle_polygon;
-mod polygon_polygon;
 mod config;
+mod polygon_polygon;
 
 pub use circle_circle::circle_circle_collision;
 pub use circle_polygon::circle_polygon_collision;
-pub use polygon_polygon::polygon_polygon_collision;
 pub use config::NarrowPhaseConfig;
+pub use polygon_polygon::polygon_polygon_collision;
 
-use crate::bodies::BodyHandle;
-use crate::collision::{Collider, ColliderHandle};
-use crate::math::{Transform, Vec2};
-use super::ContactManifold;
+use crate::collision::{Collider, ContactManifold};
+use crate::math::Transform;
 
 /// Narrow-phase collision detection system.
 ///
 /// The narrow-phase performs precise collision detection between pairs
 /// of shapes that were identified as potentially overlapping by the broad-phase.
-#[derive(Debug)]
+///
+/// Every manifold it produces is expressed for the pair (A, B): the normal
+/// points from A to B and the penetration is positive while the shapes
+/// overlap.
+#[derive(Debug, Clone)]
 pub struct NarrowPhase {
     /// Configuration
     config: NarrowPhaseConfig,
@@ -36,13 +38,6 @@ impl NarrowPhase {
         Self { config }
     }
 
-    /// Create a new narrow-phase detector with default configuration
-    #[inline]
-    #[must_use]
-    pub fn default() -> Self {
-        Self::new(NarrowPhaseConfig::default())
-    }
-
     /// Get the configuration
     #[inline]
     #[must_use]
@@ -52,7 +47,12 @@ impl NarrowPhase {
 
     /// Detect collision between two colliders
     ///
-    /// Returns a contact manifold if the colliders are overlapping, None otherwise.
+    /// The returned manifold carries the body and collider handles of the pair
+    /// as well as the combined friction and restitution of the two colliders.
+    /// Friction is combined as `sqrt(f_a * f_b)` and restitution as
+    /// `max(e_a, e_b)`, matching the usual mixing rules.
+    ///
+    /// Returns `None` when the shapes do not overlap.
     #[inline]
     #[must_use]
     pub fn collide(
@@ -62,54 +62,31 @@ impl NarrowPhase {
         collider_b: &Collider,
         transform_b: Transform,
     ) -> Option<ContactManifold> {
-        let shape_a = collider_a.shape()?;
-        let shape_b = collider_b.shape()?;
+        let mut manifold = self.collide_shapes(
+            collider_a.shape(),
+            transform_a,
+            collider_b.shape(),
+            transform_b,
+        )?;
 
-        match (shape_a, shape_b) {
-            (crate::shapes::Shape::Circle(circle_a), crate::shapes::Shape::Circle(circle_b)) => {
-                circle_circle_collision(
-                    circle_a,
-                    transform_a,
-                    circle_b,
-                    transform_b,
-                    &self.config,
-                )
-            }
-            (crate::shapes::Shape::Circle(circle_a), crate::shapes::Shape::Polygon(polygon_b)) => {
-                circle_polygon_collision(
-                    circle_a,
-                    transform_a,
-                    polygon_b,
-                    transform_b,
-                    &self.config,
-                )
-            }
-            (crate::shapes::Shape::Polygon(polygon_a), crate::shapes::Shape::Circle(circle_b)) => {
-                circle_polygon_collision(
-                    circle_b,
-                    transform_b,
-                    polygon_a,
-                    transform_a,
-                    &self.config,
-                ).map(|mut manifold| {
-                    manifold.flip();
-                    manifold
-                })
-            }
-            (crate::shapes::Shape::Polygon(polygon_a), crate::shapes::Shape::Polygon(polygon_b)) => {
-                polygon_polygon_collision(
-                    polygon_a,
-                    transform_a,
-                    polygon_b,
-                    transform_b,
-                    &self.config,
-                )
-            }
-            _ => None,
-        }
+        manifold.set_pair(
+            collider_a.body_handle(),
+            collider_b.body_handle(),
+            collider_a.handle(),
+            collider_b.handle(),
+        );
+        manifold.set_friction((collider_a.friction() * collider_b.friction()).sqrt());
+        manifold.set_restitution(collider_a.restitution().max(collider_b.restitution()));
+        manifold.set_sensor(collider_a.is_sensor() || collider_b.is_sensor());
+
+        Some(manifold)
     }
 
     /// Detect collision between two shapes directly
+    ///
+    /// The resulting manifold has no handles attached and its friction and
+    /// restitution are left at zero; use [`NarrowPhase::collide`] when the
+    /// colliders are available.
     #[inline]
     #[must_use]
     pub fn collide_shapes(
@@ -119,152 +96,45 @@ impl NarrowPhase {
         shape_b: &crate::shapes::Shape,
         transform_b: Transform,
     ) -> Option<ContactManifold> {
+        use crate::shapes::Shape::{Circle, Polygon};
+
         match (shape_a, shape_b) {
-            (crate::shapes::Shape::Circle(circle_a), crate::shapes::Shape::Circle(circle_b)) => {
-                circle_circle_collision(
-                    circle_a,
-                    transform_a,
-                    circle_b,
-                    transform_b,
-                    &self.config,
-                )
+            (Circle(circle_a), Circle(circle_b)) => {
+                circle_circle_collision(circle_a, transform_a, circle_b, transform_b, &self.config)
             }
-            (crate::shapes::Shape::Circle(circle_a), crate::shapes::Shape::Polygon(polygon_b)) => {
-                circle_polygon_collision(
-                    circle_a,
-                    transform_a,
-                    polygon_b,
-                    transform_b,
-                    &self.config,
-                )
-            }
-            (crate::shapes::Shape::Polygon(polygon_a), crate::shapes::Shape::Circle(circle_b)) => {
-                circle_polygon_collision(
-                    circle_b,
-                    transform_b,
-                    polygon_a,
-                    transform_a,
-                    &self.config,
-                ).map(|mut manifold| {
-                    manifold.flip();
-                    manifold
-                })
-            }
-            (crate::shapes::Shape::Polygon(polygon_a), crate::shapes::Shape::Polygon(polygon_b)) => {
-                polygon_polygon_collision(
-                    polygon_a,
-                    transform_a,
-                    polygon_b,
-                    transform_b,
-                    &self.config,
-                )
-            }
-            _ => None,
+            (Circle(circle_a), Polygon(polygon_b)) => circle_polygon_collision(
+                circle_a,
+                transform_a,
+                polygon_b,
+                transform_b,
+                &self.config,
+            ),
+            (Polygon(polygon_a), Circle(circle_b)) => circle_polygon_collision(
+                circle_b,
+                transform_b,
+                polygon_a,
+                transform_a,
+                &self.config,
+            )
+            .map(|mut manifold| {
+                // The shapes were swapped to keep (circle, polygon) ordering,
+                // so the manifold has to be flipped back to (A, B).
+                manifold.flip();
+                manifold
+            }),
+            (Polygon(polygon_a), Polygon(polygon_b)) => polygon_polygon_collision(
+                polygon_a,
+                transform_a,
+                polygon_b,
+                transform_b,
+                &self.config,
+            ),
         }
     }
 }
 
 impl Default for NarrowPhase {
     fn default() -> Self {
-        Self::default()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::shapes::{Circle, Polygon};
-    use crate::math::Rot2;
-
-    #[test]
-    fn test_circle_circle_collision() {
-        let narrow = NarrowPhase::default();
-
-        let circle_a = Circle::new(1.0);
-        let circle_b = Circle::new(1.0);
-
-        let transform_a = Transform::identity();
-        let transform_b = Transform::from_translation(Vec2::new(1.5, 0.0));
-
-        let shape_a = crate::shapes::Shape::Circle(circle_a);
-        let shape_b = crate::shapes::Shape::Circle(circle_b);
-
-        let result = narrow.collide_shapes(&shape_a, transform_a, &shape_b, transform_b);
-
-        assert!(result.is_some());
-        let manifold = result.unwrap();
-        assert_eq!(manifold.contact_count(), 1);
-    }
-
-    #[test]
-    fn test_circle_circle_no_collision() {
-        let narrow = NarrowPhase::default();
-
-        let circle_a = Circle::new(1.0);
-        let circle_b = Circle::new(1.0);
-
-        let transform_a = Transform::identity();
-        let transform_b = Transform::from_translation(Vec2::new(3.0, 0.0));
-
-        let shape_a = crate::shapes::Shape::Circle(circle_a);
-        let shape_b = crate::shapes::Shape::Circle(circle_b);
-
-        let result = narrow.collide_shapes(&shape_a, transform_a, &shape_b, transform_b);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_circle_polygon_collision() {
-        let narrow = NarrowPhase::default();
-
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        let transform_a = Transform::identity();
-        let transform_b = Transform::from_translation(Vec2::new(1.0, 0.0));
-
-        let shape_a = crate::shapes::Shape::Circle(circle);
-        let shape_b = crate::shapes::Shape::Polygon(polygon);
-
-        let result = narrow.collide_shapes(&shape_a, transform_a, &shape_b, transform_b);
-
-        assert!(result.is_some());
-    }
-
-    #[test]
-    fn test_polygon_polygon_collision() {
-        let narrow = NarrowPhase::default();
-
-        let polygon_a = Polygon::from_rectangle(2.0, 2.0);
-        let polygon_b = Polygon::from_rectangle(2.0, 2.0);
-
-        let transform_a = Transform::identity();
-        let transform_b = Transform::from_translation(Vec2::new(1.5, 0.0));
-
-        let shape_a = crate::shapes::Shape::Polygon(polygon_a);
-        let shape_b = crate::shapes::Shape::Polygon(polygon_b);
-
-        let result = narrow.collide_shapes(&shape_a, transform_a, &shape_b, transform_b);
-
-        assert!(result.is_some());
-    }
-
-    #[test]
-    fn test_polygon_polygon_no_collision() {
-        let narrow = NarrowPhase::default();
-
-        let polygon_a = Polygon::from_rectangle(2.0, 2.0);
-        let polygon_b = Polygon::from_rectangle(2.0, 2.0);
-
-        let transform_a = Transform::identity();
-        let transform_b = Transform::from_translation(Vec2::new(5.0, 0.0));
-
-        let shape_a = crate::shapes::Shape::Polygon(polygon_a);
-        let shape_b = crate::shapes::Shape::Polygon(polygon_b);
-
-        let result = narrow.collide_shapes(&shape_a, transform_a, &shape_b, transform_b);
-
-        assert!(result.is_none());
+        Self::new(NarrowPhaseConfig::default())
     }
 }

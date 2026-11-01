@@ -3,14 +3,17 @@
 //! This module provides a handle type for referencing bodies.
 
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// A handle to a body in the physics world.
 ///
 /// Body handles are used to reference bodies after they are created.
 /// They are lightweight and can be copied freely.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct BodyHandle {
     /// Unique identifier for the body
     pub id: u64,
@@ -109,6 +112,7 @@ impl Default for BodyHandleGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::hash::Hasher;
 
     #[test]
     fn test_body_handle() {

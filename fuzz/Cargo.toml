@@ -1,0 +1,31 @@
+[package]
+name = "ro-physics-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ro_physics = { path = "../crates/ro_physics", features = ["serialization"] }
+
+# Prevent this from interfering with workflows
+[[bin]]
+name = "step"
+path = "fuzz_targets/step.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "shapes"
+path = "fuzz_targets/shapes.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "serialization"
+path = "fuzz_targets/serialization.rs"
+test = false
+doc = false

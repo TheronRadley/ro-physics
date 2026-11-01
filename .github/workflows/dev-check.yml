@@ -1,0 +1,106 @@
+name: Dev Check
+
+# Temporary development workflow used to build and test the library inside
+# GitHub Actions while the crate is being repaired (the development sandbox
+# has no Rust toolchain and no crates.io access). Build logs are published
+# to a sibling `*-logs` branch. Removed once the work is finished.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["arena/**"]
+    paths-ignore: ["ci-logs/**"]
+
+concurrency:
+  group: dev-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build and test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      # Format in place so the build below sees the formatted tree, and publish
+      # the diff instead of committing it: a push from the default token does
+      # not start a new workflow run, so the formatted commit has to be made
+      # by a human (or a token that does).
+      - name: Format
+        run: |
+          mkdir -p /tmp/logs
+          {
+            echo "### rustfmt version"; rustfmt --version
+            echo "### cargo fmt --all -- --check"
+            cargo fmt --all -- --check 2>&1
+            echo "### exit: $?"
+          } > /tmp/logs/fmt-check.txt 2>&1 || true
+          head -40 /tmp/logs/fmt-check.txt
+          cargo fmt --all
+          git diff --binary > /tmp/logs/fmt.patch
+          if [ -s /tmp/logs/fmt.patch ]; then
+            echo "formatting changed $(git diff --name-only | wc -l) file(s)"
+          else
+            echo "formatting already clean"
+          fi
+
+      - name: Build library
+        run: |
+          mkdir -p /tmp/logs
+          {
+            echo "### rustc version"; rustc --version
+            echo "### cargo check -p ro_physics --all-targets --all-features"
+            cargo check -p ro_physics --all-targets --all-features 2>&1
+            echo "### exit: $?"
+          } > /tmp/logs/check.txt 2>&1 || true
+          tail -5 /tmp/logs/check.txt
+
+      - name: Clippy library
+        run: |
+          cargo clippy -p ro_physics --all-targets --all-features -- -D warnings > /tmp/logs/clippy.txt 2>&1 || true
+          tail -5 /tmp/logs/clippy.txt
+
+      - name: Test library
+        run: |
+          cargo test -p ro_physics --all-features > /tmp/logs/test.txt 2>&1 || true
+          tail -20 /tmp/logs/test.txt
+
+      - name: Check workspace
+        run: |
+          cargo check --workspace --all-targets --all-features > /tmp/logs/workspace.txt 2>&1 || true
+          tail -5 /tmp/logs/workspace.txt
+
+      - name: Clippy workspace
+        run: |
+          cargo clippy --workspace --all-targets --all-features -- -D warnings > /tmp/logs/clippy-workspace.txt 2>&1 || true
+          tail -5 /tmp/logs/clippy-workspace.txt
+
+      # The sandbox cannot run cargo, so the resolved lockfile has to come from
+      # here if it is going to be committed at all.
+      - name: Capture the resolved lockfile
+        run: cp Cargo.lock /tmp/logs/Cargo.lock
+
+      - name: Publish logs
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan logs-tmp
+          git rm -rf --quiet . || true
+          mkdir -p ci-logs
+          cp /tmp/logs/* ci-logs/ || true
+          git add ci-logs
+          git commit -m "ci logs for ${GITHUB_SHA}" --quiet
+          git push --force origin "HEAD:${GITHUB_REF_NAME}-logs"

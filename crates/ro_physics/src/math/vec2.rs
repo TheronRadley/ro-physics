@@ -7,15 +7,18 @@ use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::constants::EPSILON;
-use crate::math::utils::{approx_eq, approx_zero};
+use crate::math::utils::approx_eq;
 
 /// A 2D vector for physics calculations.
 ///
 /// This is the fundamental building block for all geometric and physical
 /// calculations in the engine. It provides comprehensive vector operations
 /// optimized for physics simulation.
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Vec2 {
     /// X component
     pub x: f32,
@@ -107,10 +110,33 @@ impl Vec2 {
     }
 
     /// Check if the vector is approximately zero
+    ///
+    /// Uses [`EPSILON`][crate::constants::EPSILON] as the tolerance.
     #[inline]
     #[must_use]
-    pub fn is_zero(self, epsilon: f32 = EPSILON) -> bool {
+    pub fn is_zero(self) -> bool {
+        self.length_squared() <= EPSILON * EPSILON
+    }
+
+    /// Check if the vector is approximately zero with an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn is_zero_eps(self, epsilon: f32) -> bool {
         self.length_squared() <= epsilon * epsilon
+    }
+
+    /// Largest component of the vector
+    #[inline]
+    #[must_use]
+    pub fn max_element(self) -> f32 {
+        self.x.max(self.y)
+    }
+
+    /// Smallest component of the vector
+    #[inline]
+    #[must_use]
+    pub fn min_element(self) -> f32 {
+        self.x.min(self.y)
     }
 
     /// Normalize the vector to unit length
@@ -347,8 +373,7 @@ impl Vec2 {
         if !self.is_finite() {
             return false;
         }
-        self.x.abs() < crate::constants::MAX_FLOAT
-            && self.y.abs() < crate::constants::MAX_FLOAT
+        self.x.abs() < crate::constants::MAX_FLOAT && self.y.abs() < crate::constants::MAX_FLOAT
     }
 
     /// Convert to an array
@@ -385,7 +410,7 @@ impl fmt::Display for Vec2 {
 
 impl Add for Vec2 {
     type Output = Self;
-    
+
     #[inline]
     fn add(self, other: Self) -> Self::Output {
         Self {
@@ -405,7 +430,7 @@ impl AddAssign for Vec2 {
 
 impl Sub for Vec2 {
     type Output = Self;
-    
+
     #[inline]
     fn sub(self, other: Self) -> Self::Output {
         Self {
@@ -425,7 +450,7 @@ impl SubAssign for Vec2 {
 
 impl Mul<f32> for Vec2 {
     type Output = Self;
-    
+
     #[inline]
     fn mul(self, scalar: f32) -> Self::Output {
         Self {
@@ -445,7 +470,7 @@ impl MulAssign<f32> for Vec2 {
 
 impl Div<f32> for Vec2 {
     type Output = Self;
-    
+
     #[inline]
     fn div(self, scalar: f32) -> Self::Output {
         let inv_scalar = if scalar.abs() < EPSILON {
@@ -469,7 +494,7 @@ impl DivAssign<f32> for Vec2 {
 
 impl Mul<Vec2> for f32 {
     type Output = Vec2;
-    
+
     #[inline]
     fn mul(self, vector: Vec2) -> Self::Output {
         vector * self
@@ -478,7 +503,7 @@ impl Mul<Vec2> for f32 {
 
 impl Neg for Vec2 {
     type Output = Self;
-    
+
     #[inline]
     fn neg(self) -> Self::Output {
         Self {
@@ -500,7 +525,7 @@ impl Eq for Vec2 {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::EPSILON;
+    use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]
     fn test_construction() {
@@ -658,7 +683,7 @@ mod tests {
     fn test_lerp() {
         let v1 = Vec2::new(0.0, 0.0);
         let v2 = Vec2::new(10.0, 10.0);
-        
+
         let mid = v1.lerp(v2, 0.5);
         assert_eq!(mid, Vec2::new(5.0, 5.0));
 
@@ -669,38 +694,46 @@ mod tests {
     #[test]
     fn test_rotate() {
         let v = Vec2::new(1.0, 0.0);
-        
+
         // Rotate 90 degrees (PI/2)
         let rotated_90 = v.rotate(crate::constants::PI_OVER_TWO);
-        assert!(approx_eq(rotated_90.x, 0.0, 1e-5));
-        assert!(approx_eq(rotated_90.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(rotated_90.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated_90.y, 1.0, 1e-5));
 
         // Rotate 180 degrees (PI)
         let rotated_180 = v.rotate(crate::constants::PI);
-        assert!(approx_eq(rotated_180.x, -1.0, 1e-5));
-        assert!(approx_eq(rotated_180.y, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated_180.x, -1.0, 1e-5));
+        assert!(approx_eq_eps(rotated_180.y, 0.0, 1e-5));
     }
 
     #[test]
     fn test_angle() {
         let v1 = Vec2::new(1.0, 0.0);
-        assert!(approx_eq(v1.angle(), 0.0, 1e-5));
+        assert!(approx_eq_eps(v1.angle(), 0.0, 1e-5));
 
         let v2 = Vec2::new(0.0, 1.0);
-        assert!(approx_eq(v2.angle(), crate::constants::PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(
+            v2.angle(),
+            crate::constants::PI_OVER_TWO,
+            1e-5
+        ));
 
         let v3 = Vec2::new(-1.0, 0.0);
-        assert!(approx_eq(v3.angle(), crate::constants::PI, 1e-5));
+        assert!(approx_eq_eps(v3.angle(), crate::constants::PI, 1e-5));
 
         let v4 = Vec2::new(0.0, -1.0);
-        assert!(approx_eq(v4.angle(), -crate::constants::PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(
+            v4.angle(),
+            -crate::constants::PI_OVER_TWO,
+            1e-5
+        ));
     }
 
     #[test]
     fn test_angle_between() {
         let v1 = Vec2::new(1.0, 0.0);
         let v2 = Vec2::new(0.0, 1.0);
-        assert!(approx_eq(
+        assert!(approx_eq_eps(
             v1.angle_between(v2),
             crate::constants::PI_OVER_TWO,
             1e-5
@@ -708,7 +741,7 @@ mod tests {
 
         let v3 = Vec2::new(1.0, 0.0);
         let v4 = Vec2::new(-1.0, 0.0);
-        assert!(approx_eq(
+        assert!(approx_eq_eps(
             v3.angle_between(v4),
             crate::constants::PI,
             1e-5
@@ -719,7 +752,7 @@ mod tests {
     fn test_projection() {
         let v1 = Vec2::new(3.0, 4.0);
         let v2 = Vec2::new(1.0, 0.0);
-        
+
         let proj_scalar = v1.project_onto_scalar(v2);
         assert!(approx_eq(proj_scalar, 3.0));
 
@@ -767,7 +800,7 @@ mod tests {
         let v = Vec2::new(5.0, -5.0);
         let min = Vec2::new(0.0, -10.0);
         let max = Vec2::new(10.0, 0.0);
-        
+
         let clamped = v.clamp(min, max);
         assert_eq!(clamped, Vec2::new(5.0, -5.0));
 
@@ -780,7 +813,7 @@ mod tests {
     fn test_min_max() {
         let v1 = Vec2::new(1.0, 5.0);
         let v2 = Vec2::new(3.0, 2.0);
-        
+
         let min = v1.min(v2);
         assert_eq!(min, Vec2::new(1.0, 2.0));
 

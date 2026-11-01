@@ -5,11 +5,11 @@
 
 use std::fmt;
 
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
-use crate::constants::EPSILON;
-use crate::math::{Rot2, Transform, Vec2};
 use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle};
+use crate::constants::{EPSILON, MAX_CORRECTION_SPEED};
+use crate::math::Vec2;
 
 /// A motor joint constraint.
 ///
@@ -21,7 +21,10 @@ use super::{BaseConstraint, Constraint, ConstraintHandle};
 ///
 /// The motor can have limits and can apply maximum forces/torques.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct MotorJoint {
     /// Base constraint data
     base: BaseConstraint,
@@ -63,17 +66,22 @@ pub struct MotorJoint {
     linear_effective_mass: f32,
     /// Effective mass for angular constraint
     angular_effective_mass: f32,
+    /// Correction velocity along the motor axis (metres per second)
+    #[cfg_attr(feature = "serialization", serde(default))]
+    linear_bias: f32,
+    /// Correction angular velocity (radians per second)
+    #[cfg_attr(feature = "serialization", serde(default))]
+    angular_bias: f32,
+    /// Timestep of the current solve, used to convert forces into impulses
+    #[cfg_attr(feature = "serialization", serde(default))]
+    current_dt: f32,
 }
 
 impl MotorJoint {
     /// Create a new motor joint
     #[inline]
     #[must_use]
-    pub fn new(
-        handle: ConstraintHandle,
-        body_a: BodyHandle,
-        body_b: BodyHandle,
-    ) -> Self {
+    pub fn new(handle: ConstraintHandle, body_a: BodyHandle, body_b: BodyHandle) -> Self {
         Self {
             base: BaseConstraint::new(handle, body_a, body_b),
             linear_offset: Vec2::zero(),
@@ -95,6 +103,9 @@ impl MotorJoint {
             angular_impulse: 0.0,
             linear_effective_mass: 0.0,
             angular_effective_mass: 0.0,
+            linear_bias: 0.0,
+            angular_bias: 0.0,
+            current_dt: 0.0,
         }
     }
 
@@ -324,6 +335,10 @@ impl MotorJoint {
 }
 
 impl Constraint for MotorJoint {
+    fn kind(&self) -> ConstraintType {
+        ConstraintType::Motor
+    }
+
     fn handle(&self) -> ConstraintHandle {
         self.base.handle()
     }
@@ -353,34 +368,38 @@ impl Constraint for MotorJoint {
             return;
         }
 
+        self.current_dt = dt.max(0.0);
+
         // Calculate effective masses
         self.linear_effective_mass = self.calculate_linear_effective_mass(body_a, body_b);
         self.angular_effective_mass = self.calculate_angular_effective_mass(body_a, body_b);
 
-        // Calculate current relative velocity
-        let relative_linear_velocity = self.calculate_relative_linear_velocity(body_a, body_b);
-        let relative_angular_velocity = self.calculate_relative_angular_velocity(body_a, body_b);
+        // Baumgarte correction: turn the remaining position error into a
+        // target velocity so it is solved together with the motor targets.
+        self.linear_bias = 0.0;
+        self.angular_bias = 0.0;
 
-        // Calculate velocity errors
-        let linear_velocity_error = self.target_linear_velocity - relative_linear_velocity;
-        let angular_velocity_error = self.target_angular_velocity - relative_angular_velocity;
-
-        // Apply stiffness
-        if self.linear_stiffness < 1.0 - EPSILON {
-            // Soft constraint
+        if dt > EPSILON && self.enable_linear_correction {
+            let world_axis = body_a.transform().rotation * self.axis;
+            let target_offset = body_a.transform().rotation * self.linear_offset;
+            let error = (body_b.position() - body_a.position() - target_offset).dot(world_axis);
+            self.linear_bias = self.correction_velocity(
+                error,
+                dt,
+                self.linear_effective_mass,
+                self.max_correction_force,
+            );
         }
 
-        if self.angular_stiffness < 1.0 - EPSILON {
-            // Soft constraint
-        }
-
-        // Calculate position errors for correction
-        if self.enable_linear_correction {
-            // Position error calculation
-        }
-
-        if self.enable_angular_correction {
-            // Angle error calculation
+        if dt > EPSILON && self.enable_angular_correction {
+            let error =
+                (body_b.rotation().angle() - body_a.rotation().angle()) - self.angular_offset;
+            self.angular_bias = self.correction_velocity(
+                error,
+                dt,
+                self.angular_effective_mass,
+                self.max_correction_torque,
+            );
         }
     }
 
@@ -391,60 +410,59 @@ impl Constraint for MotorJoint {
 
         // Solve linear constraint
         if self.linear_effective_mass > EPSILON {
-            let relative_linear_velocity = self.calculate_relative_linear_velocity(body_a, body_b);
-            let linear_velocity_error = self.target_linear_velocity - relative_linear_velocity;
+            let world_axis = body_a.transform().rotation * self.axis;
+            let relative_velocity = self
+                .calculate_relative_linear_velocity(body_a, body_b)
+                .dot(world_axis);
+            let target_velocity = self.target_linear_velocity.dot(world_axis) + self.linear_bias;
 
-            // Calculate linear impulse
-            let linear_impulse = self.calculate_linear_impulse(
-                body_a, body_b, linear_velocity_error
-            );
+            let mut impulse = (target_velocity - relative_velocity) * self.linear_effective_mass;
 
-            // Apply damping
-            let linear_impulse = if self.linear_damping > EPSILON {
-                linear_impulse * (1.0 - self.linear_damping)
-            } else {
-                linear_impulse
-            };
+            // Damping resists the current relative motion
+            if self.linear_damping > EPSILON {
+                impulse -= self.linear_damping * self.linear_effective_mass * relative_velocity;
+            }
 
-            // Apply stiffness
-            let linear_impulse = if self.linear_stiffness < 1.0 - EPSILON {
-                linear_impulse * self.linear_stiffness
-            } else {
-                linear_impulse
-            };
+            // Soft constraint
+            if self.linear_stiffness < 1.0 - EPSILON {
+                impulse *= self.linear_stiffness;
+            }
+
+            if self.max_force > EPSILON {
+                let max_impulse = self.max_force * self.current_dt;
+                impulse = impulse.clamp(-max_impulse, max_impulse);
+            }
 
             // Apply the impulse
-            self.apply_linear_impulse(body_a, body_b, linear_impulse);
-            self.linear_impulse += linear_impulse;
+            self.apply_linear_impulse(body_a, body_b, world_axis * impulse);
+            self.linear_impulse += world_axis * impulse;
         }
 
         // Solve angular constraint
         if self.angular_effective_mass > EPSILON {
-            let relative_angular_velocity = self.calculate_relative_angular_velocity(body_a, body_b);
-            let angular_velocity_error = self.target_angular_velocity - relative_angular_velocity;
+            let relative_velocity = self.calculate_relative_angular_velocity(body_a, body_b);
+            let target_velocity = self.target_angular_velocity + self.angular_bias;
 
-            // Calculate angular impulse
-            let angular_impulse = self.calculate_angular_impulse(
-                body_a, body_b, angular_velocity_error
-            );
+            let mut impulse = (target_velocity - relative_velocity) * self.angular_effective_mass;
 
-            // Apply damping
-            let angular_impulse = if self.angular_damping > EPSILON {
-                angular_impulse * (1.0 - self.angular_damping)
-            } else {
-                angular_impulse
-            };
+            // Damping resists the current relative motion
+            if self.angular_damping > EPSILON {
+                impulse -= self.angular_damping * self.angular_effective_mass * relative_velocity;
+            }
 
-            // Apply stiffness
-            let angular_impulse = if self.angular_stiffness < 1.0 - EPSILON {
-                angular_impulse * self.angular_stiffness
-            } else {
-                angular_impulse
-            };
+            // Soft constraint
+            if self.angular_stiffness < 1.0 - EPSILON {
+                impulse *= self.angular_stiffness;
+            }
+
+            if self.max_torque > EPSILON {
+                let max_impulse = self.max_torque * self.current_dt;
+                impulse = impulse.clamp(-max_impulse, max_impulse);
+            }
 
             // Apply the impulse
-            self.apply_angular_impulse(body_a, body_b, angular_impulse);
-            self.angular_impulse += angular_impulse;
+            self.apply_angular_impulse(body_a, body_b, impulse);
+            self.angular_impulse += impulse;
         }
     }
 
@@ -495,10 +513,10 @@ impl MotorJoint {
     fn calculate_relative_linear_velocity(&self, body_a: &Body, body_b: &Body) -> Vec2 {
         // Get the axis in world space
         let world_axis = body_a.transform().rotation * self.axis;
-        
+
         // Calculate relative velocity along the axis
         let relative_velocity = body_b.linear_velocity() - body_a.linear_velocity();
-        
+
         // Project onto axis
         relative_velocity.dot(world_axis) * world_axis
     }
@@ -509,53 +527,24 @@ impl MotorJoint {
         body_b.angular_velocity() - body_a.angular_velocity()
     }
 
-    /// Calculate linear impulse
+    /// Convert a position error into a Baumgarte correction velocity
+    ///
+    /// The result is clamped so the impulse needed to apply it stays below
+    /// `max_force` newtons (or newton-metres for the angular case).
     #[inline]
-    fn calculate_linear_impulse(
-        &self,
-        body_a: &Body,
-        body_b: &Body,
-        velocity_error: Vec2,
-    ) -> Vec2 {
-        if self.linear_effective_mass <= EPSILON {
-            return Vec2::zero();
+    fn correction_velocity(&self, error: f32, dt: f32, effective_mass: f32, max_force: f32) -> f32 {
+        // Baumgarte factor
+        const BAUMGARTE_FACTOR: f32 = 0.2;
+
+        let velocity = (-BAUMGARTE_FACTOR * error / dt)
+            .clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
+
+        if max_force > EPSILON && effective_mass > EPSILON {
+            let max_velocity = max_force * dt / effective_mass;
+            return velocity.clamp(-max_velocity, max_velocity);
         }
 
-        // Get the axis in world space
-        let world_axis = body_a.transform().rotation * self.axis;
-        
-        // Project velocity error onto axis
-        let error_along_axis = velocity_error.dot(world_axis);
-        
-        // Calculate impulse magnitude
-        let impulse_magnitude = -error_along_axis * self.linear_effective_mass;
-        
-        // Clamp to maximum force
-        let max_force = self.max_force * crate::constants::MIN_POSITIVE;
-        let impulse_magnitude = impulse_magnitude.clamp(-max_force, max_force);
-        
-        // Return impulse vector
-        world_axis * impulse_magnitude
-    }
-
-    /// Calculate angular impulse
-    #[inline]
-    fn calculate_angular_impulse(
-        &self,
-        body_a: &Body,
-        body_b: &Body,
-        velocity_error: f32,
-    ) -> f32 {
-        if self.angular_effective_mass <= EPSILON {
-            return 0.0;
-        }
-
-        // Calculate impulse magnitude
-        let impulse = -velocity_error * self.angular_effective_mass;
-        
-        // Clamp to maximum torque
-        let max_torque = self.max_torque * crate::constants::MIN_POSITIVE;
-        impulse.clamp(-max_torque, max_torque)
+        velocity
     }
 
     /// Apply linear impulse
@@ -566,10 +555,10 @@ impl MotorJoint {
         }
 
         if body_a.is_dynamic() {
-            body_a.add_impulse(-impulse);
+            body_a.add_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_impulse(impulse);
+            body_b.add_impulse_no_wake(impulse);
         }
     }
 
@@ -581,10 +570,10 @@ impl MotorJoint {
         }
 
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
     }
 }
@@ -603,6 +592,7 @@ impl fmt::Display for MotorJoint {
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
+    use crate::constants::PI;
     use crate::math::utils::approx_eq;
 
     #[test]
@@ -694,12 +684,7 @@ mod tests {
 
         let mut joint = MotorJoint::new(handle, body_a, body_b);
 
-        joint.set_motor_parameters(
-            Vec2::new(1.0, 2.0),
-            5.0,
-            100.0,
-            200.0,
-        );
+        joint.set_motor_parameters(Vec2::new(1.0, 2.0), 5.0, 100.0, 200.0);
 
         assert_eq!(joint.target_linear_velocity(), Vec2::new(1.0, 2.0));
         assert!(approx_eq(joint.target_angular_velocity(), 5.0));
@@ -745,7 +730,7 @@ mod tests {
 
         let mut joint = MotorJoint::new(handle, body_a, body_b);
         joint.set_axis(Vec2::new(3.0, 4.0));
-        
+
         // Axis should be normalized
         assert!(approx_eq(joint.axis().length(), 1.0));
         assert!(approx_eq(joint.axis().x, 0.6));

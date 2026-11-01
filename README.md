@@ -42,7 +42,7 @@ let ground = world.create_static_body(Transform::identity());
 world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
 
 // Create a dynamic circle
-let ball = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), 0.0));
+let ball = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), Rot2::identity()));
 world.add_circle(ball, 0.5, 1.0);
 
 // Apply an initial velocity

@@ -1,22 +1,62 @@
 //! Sequential impulse solver for the physics engine.
 //!
-//! This module implements a sequential impulse solver that resolves
-//! collisions and constraints between rigid bodies.
+//! This module implements a sequential impulse (SI) solver: contacts are
+//! turned into velocity constraints and solved iteratively, one contact at a
+//! time, until the relative normal velocity at every contact point is
+//! non-negative and friction stays inside its Coulomb cone.
+//!
+//! The implementation follows the approach popularised by Box2D:
+//!
+//! * **Warm starting** — accumulated impulses from the previous step are
+//!   applied before iterating, which makes resting stacks converge quickly.
+//! * **Baumgarte stabilisation** — penetration is removed with a velocity bias
+//!   (plus an explicit positional relaxation pass) instead of a hard
+//!   constraint, which keeps the system solvable.
+//! * **Accumulated impulse clamping** — normal impulses stay non-negative
+//!   (contacts can push but never pull) and friction impulses are clamped to
+//!   `friction * normal_impulse`.
+//!
+//! Bodies are addressed by [`BodyHandle`], never by array position, so a
+//! manifold produced by the narrow-phase can be solved directly.
 
-use crate::bodies::Body;
-use crate::collision::ContactManifold;
-use crate::math::Vec2;
+use std::collections::HashMap;
+
 use super::SolverConfig;
+use crate::bodies::{Body, BodyHandle};
+use crate::collision::ContactManifold;
+use crate::constants::{EPSILON, LINEAR_SLOP, MAX_CORRECTION_SPEED};
+use crate::math::Vec2;
+
+/// A single contact point prepared for solving.
+#[derive(Debug, Clone, Copy)]
+struct ContactConstraint {
+    /// Index of the contact in its manifold
+    index: usize,
+    /// Contact normal (points from A to B)
+    normal: Vec2,
+    /// Contact tangent (`normal.perp()`)
+    tangent: Vec2,
+    /// Lever arm from body A's centre of mass
+    ra: Vec2,
+    /// Lever arm from body B's centre of mass
+    rb: Vec2,
+    /// Effective mass along the normal
+    normal_mass: f32,
+    /// Effective mass along the tangent
+    tangent_mass: f32,
+    /// Baumgarte velocity bias used to push the bodies apart
+    position_bias: f32,
+    /// Velocity bias introduced by restitution
+    restitution_bias: f32,
+    /// Penetration depth (positive when overlapping)
+    penetration: f32,
+    /// Accumulated normal impulse
+    normal_impulse: f32,
+    /// Accumulated tangent (friction) impulse
+    tangent_impulse: f32,
+}
 
 /// Sequential impulse solver.
-///
-/// This solver resolves collisions by iteratively applying impulses
-/// to satisfy contact constraints. It handles:
-/// - Normal impulses (preventing interpenetration)
-/// - Friction impulses (Coulomb friction model)
-/// - Restitution (bounciness)
-/// - Warm starting (using previous frame's impulses)
-/// - Position correction (Baumgarte stabilization)
 #[derive(Debug, Clone)]
 pub struct SequentialImpulseSolver {
     /// Solver configuration
@@ -40,461 +80,294 @@ impl SequentialImpulseSolver {
 
     /// Solve a set of contact manifolds
     ///
-    /// This applies impulses to resolve collisions between bodies.
+    /// `bodies` is the world's body storage and `body_indices` maps a body
+    /// handle to its index in that storage. Manifolds whose bodies are missing,
+    /// identical, or both non-dynamic are skipped, as are sensor manifolds
+    /// (they report overlaps but never generate impulses).
     #[inline]
     pub fn solve_contacts(
         &self,
         bodies: &mut [Option<Body>],
         manifolds: &mut [ContactManifold],
         dt: f32,
+        body_indices: &HashMap<BodyHandle, usize>,
     ) {
-        if manifolds.is_empty() {
+        if manifolds.is_empty() || !dt.is_finite() || dt <= 0.0 {
             return;
         }
 
-        // Warm starting: apply accumulated impulses from previous frame
-        if self.config.warm_starting {
-            self.apply_warm_starting(bodies, manifolds);
-        }
+        let inv_dt = 1.0 / dt;
 
-        // Velocity iterations
-        for _ in 0..self.config.velocity_iterations {
-            for manifold in manifolds.iter_mut() {
-                self.solve_velocity_constraints(bodies, manifold, dt);
+        for manifold in manifolds.iter_mut() {
+            if manifold.is_sensor() || manifold.contact_count() == 0 {
+                continue;
             }
-        }
 
-        // Position corrections
-        if self.config.position_iterations > 0 {
-            for _ in 0..self.config.position_iterations {
-                for manifold in manifolds.iter_mut() {
-                    self.solve_position_constraints(bodies, manifold);
-                }
+            let Some((index_a, index_b)) =
+                resolve_pair(manifold.body_a(), manifold.body_b(), body_indices)
+            else {
+                continue;
+            };
+
+            let Some((body_a, body_b)) = two_bodies_mut(bodies, index_a, index_b) else {
+                continue;
+            };
+
+            // Two non-dynamic bodies cannot exchange impulses
+            if !body_a.is_dynamic() && !body_b.is_dynamic() {
+                continue;
             }
+
+            // A sleeping body is at rest by definition: solving its contacts
+            // would give it a small velocity without ever waking it, so the
+            // world wakes it first (see `World::wake_islands`) when the pair
+            // really has to move.
+            if body_a.is_sleeping() || body_b.is_sleeping() {
+                continue;
+            }
+
+            self.solve_manifold(body_a, body_b, manifold, inv_dt);
         }
     }
 
-    /// Apply warm starting impulses
-    fn apply_warm_starting(&self, bodies: &mut [Option<Body>], manifolds: &mut [ContactManifold]) {
-        for manifold in manifolds {
-            for contact in manifold.contacts() {
-                let body_a = self.get_body_mut(bodies, contact.contact_id().feature_a as usize);
-                let body_b = self.get_body_mut(bodies, contact.contact_id().feature_b as usize);
-
-                if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-                    // Apply accumulated normal impulse
-                    let impulse = contact.normal_impulse();
-                    if impulse > 0.0 {
-                        let normal = contact.normal();
-                        self.apply_impulse(
-                            body_a, body_b,
-                            normal,
-                            impulse,
-                            contact.position(),
-                        );
-                    }
-
-                    // Apply accumulated tangent impulse
-                    let tangent = contact.normal().perp();
-                    let tangent_impulse = contact.tangent_impulse();
-                    if tangent_impulse.abs() > 0.0 {
-                        self.apply_impulse(
-                            body_a, body_b,
-                            tangent,
-                            tangent_impulse,
-                            contact.position(),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    /// Solve velocity constraints
-    fn solve_velocity_constraints(
+    /// Solve a single manifold (velocity + position constraints)
+    fn solve_manifold(
         &self,
-        bodies: &mut [Option<Body>],
+        body_a: &mut Body,
+        body_b: &mut Body,
         manifold: &mut ContactManifold,
-        dt: f32,
+        inv_dt: f32,
     ) {
-        for contact in manifold.contacts_mut() {
-            let body_a = self.get_body_mut(bodies, contact.contact_id().feature_a as usize);
-            let body_b = self.get_body_mut(bodies, contact.contact_id().feature_b as usize);
+        let friction = manifold.friction().max(0.0);
+        let restitution = if self.config.enable_restitution {
+            manifold.restitution().max(0.0)
+        } else {
+            0.0
+        };
 
-            if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-                // Skip if either body is static
-                if body_a.is_static() && body_b.is_static() {
-                    continue;
-                }
-
-                // Calculate relative velocity at contact point
-                let relative_velocity = self.calculate_relative_velocity(
-                    body_a, body_b, contact.position()
-                );
-
-                // Calculate normal velocity
-                let normal_velocity = relative_velocity.dot(contact.normal());
-
-                // Only resolve if bodies are moving toward each other
-                if normal_velocity > 0.0 {
-                    continue;
-                }
-
-                // Calculate normal impulse
-                let normal_impulse = self.calculate_normal_impulse(
-                    body_a, body_b,
-                    contact,
-                    normal_velocity,
-                    dt,
-                );
-
-                // Apply normal impulse
-                self.apply_normal_impulse(
-                    body_a, body_b,
-                    contact,
-                    normal_impulse,
-                    dt,
-                );
-
-                // Calculate tangent impulse (friction)
-                if self.config.enable_friction {
-                    let tangent_impulse = self.calculate_tangent_impulse(
-                        body_a, body_b,
-                        contact,
-                        relative_velocity,
-                        normal_velocity,
-                        normal_impulse,
-                        dt,
-                    );
-
-                    // Apply tangent impulse
-                    self.apply_tangent_impulse(
-                        body_a, body_b,
-                        contact,
-                        tangent_impulse,
-                        dt,
-                    );
-                }
-            }
-        }
-    }
-
-    /// Calculate relative velocity at a contact point
-    #[inline]
-    fn calculate_relative_velocity(&self, body_a: &Body, body_b: &Body, contact_point: Vec2) -> Vec2 {
-        // Velocity at contact point for body A
-        let va = body_a.velocity_at_point(contact_point);
-        
-        // Velocity at contact point for body B
-        let vb = body_b.velocity_at_point(contact_point);
-        
-        // Relative velocity
-        va - vb
-    }
-
-    /// Calculate normal impulse
-    #[inline]
-    fn calculate_normal_impulse(
-        &self,
-        body_a: &mut Body,
-        body_b: &mut Body,
-        contact: &mut super::ContactManifold::Contact,
-        normal_velocity: f32,
-        dt: f32,
-    ) -> f32 {
-        let normal = contact.normal();
-        let contact_point = contact.position();
-
-        // Calculate effective mass
-        let effective_mass = self.calculate_effective_mass(
-            body_a, body_b,
-            normal,
-            contact_point - body_a.position(),
-            contact_point - body_b.position(),
-        );
-
-        if effective_mass <= EPSILON {
-            return 0.0;
-        }
-
-        // Calculate restitution
-        let restitution = self.calculate_restitution(body_a, body_b, normal_velocity);
-
-        // Normal impulse = -(1 + e) * v_n / m_eff
-        let impulse = -(1.0 + restitution) * normal_velocity / effective_mass;
-
-        // Clamp to prevent negative impulses (bodies moving apart)
-        let old_impulse = contact.normal_impulse();
-        let new_impulse = (old_impulse + impulse).max(0.0);
-        
-        // Store the accumulated impulse for warm starting
-        // Note: We don't modify contact here, that's done in apply_normal_impulse
-        
-        new_impulse - old_impulse
-    }
-
-    /// Apply normal impulse
-    #[inline]
-    fn apply_normal_impulse(
-        &self,
-        body_a: &mut Body,
-        body_b: &mut Body,
-        contact: &mut super::ContactManifold::Contact,
-        impulse: f32,
-        _dt: f32,
-    ) {
-        if impulse <= EPSILON {
+        let mut constraints =
+            self.prepare_constraints(body_a, body_b, manifold, inv_dt, restitution);
+        if constraints.is_empty() {
             return;
         }
 
-        let normal = contact.normal();
-        let contact_point = contact.position();
-
-        // Apply to body A
-        if !body_a.is_static() {
-            let ra = contact_point - body_a.position();
-            body_a.add_impulse_at_point(-normal * impulse, contact_point);
-            
-            // Update accumulated impulse for warm starting
-            // We'll do this after applying to both bodies
+        if self.config.warm_starting {
+            self.warm_start(body_a, body_b, &constraints);
         }
 
-        // Apply to body B
-        if !body_b.is_static() {
-            let rb = contact_point - body_b.position();
-            body_b.add_impulse_at_point(normal * impulse, contact_point);
+        for _ in 0..self.config.velocity_iterations {
+            self.solve_normal_constraints(body_a, body_b, &mut constraints);
+
+            if self.config.enable_friction && friction > 0.0 {
+                self.solve_friction_constraints(body_a, body_b, &mut constraints, friction);
+            }
         }
 
-        // Update accumulated impulse in contact
-        contact.normal_impulse += impulse;
+        // Write the accumulated impulses back so the next step can warm start
+        for constraint in &constraints {
+            if let Some(contact) = manifold.contacts_mut().get_mut(constraint.index) {
+                contact.set_normal_impulse(constraint.normal_impulse);
+                contact.set_tangent_impulse(constraint.tangent_impulse);
+            }
+        }
+
+        if self.config.position_iterations > 0 {
+            self.solve_position_constraints(body_a, body_b, &mut constraints);
+        }
     }
 
-    /// Calculate effective mass for a contact
-    #[inline]
-    fn calculate_effective_mass(
+    /// Build the per-contact constraints for a manifold
+    fn prepare_constraints(
         &self,
         body_a: &Body,
         body_b: &Body,
-        normal: Vec2,
-        ra: Vec2,
-        rb: Vec2,
-    ) -> f32 {
-        let inv_mass_a = body_a.inv_mass();
-        let inv_mass_b = body_b.inv_mass();
-        let inv_inertia_a = body_a.inv_inertia();
-        let inv_inertia_b = body_b.inv_inertia();
+        manifold: &ContactManifold,
+        inv_dt: f32,
+        restitution: f32,
+    ) -> Vec<ContactConstraint> {
+        let mut constraints = Vec::with_capacity(manifold.contact_count());
 
-        // Effective mass = 1 / (inv_mass_a + inv_mass_b + 
-        //                  ra.cross(normal)^2 * inv_inertia_a +
-        //                  rb.cross(normal)^2 * inv_inertia_b)
-        let ra_cross_normal = ra.cross(normal);
-        let rb_cross_normal = rb.cross(normal);
+        for (index, contact) in manifold.contacts().iter().enumerate() {
+            if !contact.is_valid() {
+                continue;
+            }
 
-        let denominator = inv_mass_a + inv_mass_b
-            + ra_cross_normal * ra_cross_normal * inv_inertia_a
-            + rb_cross_normal * rb_cross_normal * inv_inertia_b;
+            let normal = contact.normal();
+            if normal.length_squared() <= EPSILON * EPSILON {
+                continue;
+            }
+            let normal = normal.normalize();
+            let tangent = normal.perp();
+            let ra = contact.position() - body_a.position();
+            let rb = contact.position() - body_b.position();
 
-        if denominator <= EPSILON {
-            0.0
-        } else {
-            1.0 / denominator
+            let normal_mass = effective_mass(body_a, body_b, normal, ra, rb);
+            let tangent_mass = effective_mass(body_a, body_b, tangent, ra, rb);
+
+            // Penetration is positive while overlapping; separation is the
+            // signed distance along the normal (negative while overlapping).
+            let penetration = contact.penetration();
+            let separation = -penetration;
+
+            let position_bias = if separation > -LINEAR_SLOP {
+                0.0
+            } else {
+                let push = (separation + LINEAR_SLOP).min(0.0);
+                (-self.config.baumgarte_factor * inv_dt * push)
+                    .min(self.config.max_position_correction * inv_dt)
+                    // `distance / dt` is unbounded as the step shrinks, and
+                    // continuous collision detection does shrink the step:
+                    // without this cap a 0.1 m correction over a 1e-5 s
+                    // sub-step would be 10 km/s, which tunnels through
+                    // anything. See `MAX_CORRECTION_SPEED`.
+                    .min(MAX_CORRECTION_SPEED)
+            };
+
+            // Restitution only kicks in above the configured threshold and is
+            // based on the approach velocity measured before solving.
+            let approach = relative_velocity(body_a, body_b, ra, rb).dot(normal);
+            let restitution_bias =
+                if restitution > 0.0 && approach < -self.config.restitution_threshold {
+                    -restitution * approach
+                } else {
+                    0.0
+                };
+
+            constraints.push(ContactConstraint {
+                index,
+                normal,
+                tangent,
+                ra,
+                rb,
+                normal_mass,
+                tangent_mass,
+                position_bias,
+                restitution_bias,
+                penetration,
+                normal_impulse: contact.normal_impulse(),
+                tangent_impulse: contact.tangent_impulse(),
+            });
+        }
+
+        constraints
+    }
+
+    /// Apply the impulses accumulated during the previous step
+    fn warm_start(&self, body_a: &mut Body, body_b: &mut Body, constraints: &[ContactConstraint]) {
+        for constraint in constraints {
+            let impulse = constraint.normal * constraint.normal_impulse
+                + constraint.tangent * constraint.tangent_impulse;
+            apply_impulse(body_a, body_b, constraint.ra, constraint.rb, impulse);
         }
     }
 
-    /// Calculate restitution
-    #[inline]
-    fn calculate_restitution(&self, body_a: &Body, body_b: &Body, normal_velocity: f32) -> f32 {
-        // If relative velocity is very small, use 0 restitution
-        if normal_velocity > -self.config.restitution_threshold {
-            return 0.0;
-        }
-
-        // Combined restitution (average of both bodies' colliders)
-        // For now, use a default value since we don't have access to colliders here
-        // This will be improved when we integrate with the world
-        0.6
-    }
-
-    /// Calculate tangent impulse (friction)
-    #[inline]
-    fn calculate_tangent_impulse(
+    /// One pass over the normal constraints
+    fn solve_normal_constraints(
         &self,
         body_a: &mut Body,
         body_b: &mut Body,
-        contact: &mut super::ContactManifold::Contact,
-        relative_velocity: Vec2,
-        normal_velocity: f32,
-        normal_impulse: f32,
-        _dt: f32,
-    ) -> f32 {
-        let normal = contact.normal();
-        let contact_point = contact.position();
-
-        // Calculate tangent vector (perpendicular to normal)
-        let tangent = normal.perp();
-
-        // Calculate tangent velocity
-        let tangent_velocity = relative_velocity.dot(tangent);
-
-        // Calculate effective mass for friction
-        let effective_mass = self.calculate_effective_mass(
-            body_a, body_b,
-            tangent,
-            contact_point - body_a.position(),
-            contact_point - body_b.position(),
-        );
-
-        if effective_mass <= EPSILON {
-            return 0.0;
-        }
-
-        // Calculate friction coefficient (combined from both bodies)
-        // For now, use a default value
-        let friction = 0.6;
-
-        // Maximum friction impulse (Coulomb friction: F_friction <= u * F_normal)
-        let max_friction = friction * normal_impulse.abs();
-
-        // Friction impulse = -v_t / m_eff
-        let mut friction_impulse = -tangent_velocity / effective_mass;
-
-        // Clamp to maximum friction
-        friction_impulse = friction_impulse.clamp(-max_friction, max_friction);
-
-        // Apply sign based on direction
-        if tangent_velocity < -EPSILON {
-            friction_impulse = -friction_impulse;
-        }
-
-        friction_impulse
-    }
-
-    /// Apply tangent impulse
-    #[inline]
-    fn apply_tangent_impulse(
-        &self,
-        body_a: &mut Body,
-        body_b: &mut Body,
-        contact: &mut super::ContactManifold::Contact,
-        impulse: f32,
-        _dt: f32,
+        constraints: &mut [ContactConstraint],
     ) {
-        if impulse.abs() <= EPSILON {
-            return;
-        }
+        for constraint in constraints.iter_mut() {
+            if constraint.normal_mass <= 0.0 {
+                continue;
+            }
 
-        let tangent = contact.normal().perp();
-        let contact_point = contact.position();
+            let velocity = relative_velocity(body_a, body_b, constraint.ra, constraint.rb);
+            let normal_velocity = velocity.dot(constraint.normal);
 
-        // Apply to body A
-        if !body_a.is_static() {
-            body_a.add_impulse_at_point(-tangent * impulse, contact_point);
-        }
+            let mut lambda = -constraint.normal_mass
+                * (normal_velocity - constraint.position_bias - constraint.restitution_bias);
 
-        // Apply to body B
-        if !body_b.is_static() {
-            body_b.add_impulse_at_point(tangent * impulse, contact_point);
-        }
+            // Contacts can push, never pull
+            let new_impulse = (constraint.normal_impulse + lambda).max(0.0);
+            lambda = new_impulse - constraint.normal_impulse;
+            constraint.normal_impulse = new_impulse;
 
-        // Update accumulated tangent impulse
-        contact.tangent_impulse += impulse;
-    }
-
-    /// Solve position constraints (Baumgarte stabilization)
-    fn solve_position_constraints(
-        &self,
-        bodies: &mut [Option<Body>],
-        manifold: &mut ContactManifold,
-    ) {
-        for contact in manifold.contacts_mut() {
-            let body_a = self.get_body_mut(bodies, contact.contact_id().feature_a as usize);
-            let body_b = self.get_body_mut(bodies, contact.contact_id().feature_b as usize);
-
-            if let (Some(body_a), Some(body_b)) = (body_a, body_b) {
-                // Skip if either body is static
-                if body_a.is_static() && body_b.is_static() {
-                    continue;
-                }
-
-                // Calculate position error
-                let contact_point = contact.position();
-                let separation = contact.penetration();
-
-                // Only correct if penetration is significant
-                if separation >= -EPSILON {
-                    continue;
-                }
-
-                // Baumgarte stabilization: apply fraction of penetration correction
-                let correction = self.config.baumgarte_factor * separation.max(-self.config.max_position_correction);
-
-                // Calculate effective mass for position correction
-                let normal = contact.normal();
-                let ra = contact_point - body_a.position();
-                let rb = contact_point - body_b.position();
-
-                let effective_mass = self.calculate_effective_mass(
-                    body_a, body_b,
-                    normal,
-                    ra,
-                    rb,
-                );
-
-                if effective_mass <= EPSILON {
-                    continue;
-                }
-
-                // Calculate position correction impulse
-                let correction_impulse = -correction / effective_mass;
-
-                // Apply position correction
-                if !body_a.is_static() {
-                    let impulse = normal * (correction_impulse * body_a.inv_mass());
-                    body_a.set_position(body_a.position() + impulse);
-                    
-                    // Apply angular correction
-                    let angular_impulse = ra.cross(normal) * correction_impulse * body_a.inv_inertia();
-                    body_a.set_rotation(body_a.rotation() + Rot2::new(angular_impulse));
-                }
-
-                if !body_b.is_static() {
-                    let impulse = -normal * (correction_impulse * body_b.inv_mass());
-                    body_b.set_position(body_b.position() + impulse);
-                    
-                    // Apply angular correction
-                    let angular_impulse = rb.cross(-normal) * correction_impulse * body_b.inv_inertia();
-                    body_b.set_rotation(body_b.rotation() + Rot2::new(angular_impulse));
-                }
+            if lambda != 0.0 {
+                let impulse = constraint.normal * lambda;
+                apply_impulse(body_a, body_b, constraint.ra, constraint.rb, impulse);
             }
         }
     }
 
-    /// Apply an impulse to two bodies
-    #[inline]
-    fn apply_impulse(
+    /// One pass over the friction constraints
+    fn solve_friction_constraints(
         &self,
         body_a: &mut Body,
         body_b: &mut Body,
-        direction: Vec2,
-        impulse: f32,
-        contact_point: Vec2,
+        constraints: &mut [ContactConstraint],
+        friction: f32,
     ) {
-        if !body_a.is_static() {
-            body_a.add_impulse_at_point(-direction * impulse, contact_point);
-        }
-        if !body_b.is_static() {
-            body_b.add_impulse_at_point(direction * impulse, contact_point);
+        for constraint in constraints.iter_mut() {
+            if constraint.tangent_mass <= 0.0 {
+                continue;
+            }
+
+            let velocity = relative_velocity(body_a, body_b, constraint.ra, constraint.rb);
+            let tangent_velocity = velocity.dot(constraint.tangent);
+
+            let mut lambda = -constraint.tangent_mass * tangent_velocity;
+
+            // Coulomb friction cone: |P_t| <= friction * P_n
+            let max_friction = friction * constraint.normal_impulse;
+            let new_impulse =
+                (constraint.tangent_impulse + lambda).clamp(-max_friction, max_friction);
+            lambda = new_impulse - constraint.tangent_impulse;
+            constraint.tangent_impulse = new_impulse;
+
+            if lambda != 0.0 {
+                let impulse = constraint.tangent * lambda;
+                apply_impulse(body_a, body_b, constraint.ra, constraint.rb, impulse);
+            }
         }
     }
 
-    /// Get a mutable reference to a body by index
-    #[inline]
-    fn get_body_mut(
+    /// Relax remaining penetration by moving the bodies apart directly
+    ///
+    /// Velocities are left untouched: this removes the "sinking" that a pure
+    /// Baumgarte bias cannot fix within the iteration budget, without adding
+    /// energy to the simulation.
+    fn solve_position_constraints(
         &self,
-        bodies: &mut [Option<Body>],
-        index: usize,
-    ) -> Option<&mut Body> {
-        bodies.get_mut(index).and_then(|b| b.as_mut())
+        body_a: &mut Body,
+        body_b: &mut Body,
+        constraints: &mut [ContactConstraint],
+    ) {
+        let inv_mass_a = body_a.inv_mass();
+        let inv_mass_b = body_b.inv_mass();
+        let total_inv_mass = inv_mass_a + inv_mass_b;
+
+        if total_inv_mass <= EPSILON {
+            return;
+        }
+
+        for _ in 0..self.config.position_iterations {
+            for constraint in constraints.iter_mut() {
+                let excess = constraint.penetration - LINEAR_SLOP;
+                if excess <= 0.0 {
+                    continue;
+                }
+
+                let correction = (excess * self.config.baumgarte_factor)
+                    .min(self.config.max_position_correction);
+                if correction <= 0.0 {
+                    continue;
+                }
+
+                let shift_a = -constraint.normal * (correction * inv_mass_a / total_inv_mass);
+                let shift_b = constraint.normal * (correction * inv_mass_b / total_inv_mass);
+
+                if body_a.is_dynamic() {
+                    body_a.set_position_no_wake(body_a.position() + shift_a);
+                }
+                if body_b.is_dynamic() {
+                    body_b.set_position_no_wake(body_b.position() + shift_b);
+                }
+
+                constraint.penetration -= correction;
+            }
+        }
     }
 }
 
@@ -504,12 +377,143 @@ impl Default for SequentialImpulseSolver {
     }
 }
 
+/// Resolve the storage indices of a manifold's bodies
+#[inline]
+fn resolve_pair(
+    handle_a: BodyHandle,
+    handle_b: BodyHandle,
+    body_indices: &HashMap<BodyHandle, usize>,
+) -> Option<(usize, usize)> {
+    if handle_a.is_null() || handle_b.is_null() || handle_a == handle_b {
+        return None;
+    }
+
+    let index_a = *body_indices.get(&handle_a)?;
+    let index_b = *body_indices.get(&handle_b)?;
+
+    Some((index_a, index_b))
+}
+
+/// Borrow two distinct bodies mutably at the same time
+///
+/// Uses `split_at_mut` (or `get_disjoint_mut` when available) so the borrow
+/// checker accepts two simultaneous mutable references into the same slice.
+#[inline]
+fn two_bodies_mut(
+    bodies: &mut [Option<Body>],
+    index_a: usize,
+    index_b: usize,
+) -> Option<(&mut Body, &mut Body)> {
+    if index_a == index_b || index_a >= bodies.len() || index_b >= bodies.len() {
+        return None;
+    }
+
+    let (first, second) = if index_a < index_b {
+        let (left, right) = bodies.split_at_mut(index_b);
+        (left.get_mut(index_a)?, right.first_mut()?)
+    } else {
+        let (left, right) = bodies.split_at_mut(index_a);
+        (right.first_mut()?, left.get_mut(index_b)?)
+    };
+
+    Some((first.as_mut()?, second.as_mut()?))
+}
+
+/// Effective mass of a contact along `direction`
+#[inline]
+fn effective_mass(body_a: &Body, body_b: &Body, direction: Vec2, ra: Vec2, rb: Vec2) -> f32 {
+    let ra_cross = ra.cross(direction);
+    let rb_cross = rb.cross(direction);
+
+    let denominator = body_a.inv_mass()
+        + body_b.inv_mass()
+        + ra_cross * ra_cross * body_a.inv_inertia()
+        + rb_cross * rb_cross * body_b.inv_inertia();
+
+    if denominator <= EPSILON {
+        0.0
+    } else {
+        1.0 / denominator
+    }
+}
+
+/// Velocity of body B relative to body A at a contact point
+///
+/// The sign convention matches the manifold normal (which points from A to
+/// B): a negative value along the normal means the bodies are approaching.
+#[inline]
+fn relative_velocity(body_a: &Body, body_b: &Body, ra: Vec2, rb: Vec2) -> Vec2 {
+    let velocity_a = body_a.linear_velocity() + perpendicular(ra) * body_a.angular_velocity();
+    let velocity_b = body_b.linear_velocity() + perpendicular(rb) * body_b.angular_velocity();
+
+    velocity_b - velocity_a
+}
+
+/// Rotate a vector 90 degrees (omega x r in 2D)
+#[inline]
+fn perpendicular(r: Vec2) -> Vec2 {
+    Vec2::new(-r.y, r.x)
+}
+
+/// Apply an impulse at a contact: `-impulse` on A, `+impulse` on B
+///
+/// Non-dynamic bodies are skipped (their inverse mass and inertia are zero,
+/// so this is a no-op for them anyway).
+#[inline]
+fn apply_impulse(body_a: &mut Body, body_b: &mut Body, ra: Vec2, rb: Vec2, impulse: Vec2) {
+    if body_a.is_dynamic() {
+        body_a.set_linear_velocity_no_wake(body_a.linear_velocity() - impulse * body_a.inv_mass());
+        body_a.set_angular_velocity_no_wake(
+            body_a.angular_velocity() - ra.cross(impulse) * body_a.inv_inertia(),
+        );
+    }
+
+    if body_b.is_dynamic() {
+        body_b.set_linear_velocity_no_wake(body_b.linear_velocity() + impulse * body_b.inv_mass());
+        body_b.set_angular_velocity_no_wake(
+            body_b.angular_velocity() + rb.cross(impulse) * body_b.inv_inertia(),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bodies::BodyHandle;
-    use crate::math::utils::approx_eq;
-    use crate::constants::EPSILON;
+    use crate::collision::{ColliderHandle, Contact, ContactId};
+    use crate::math::Vec2;
+
+    fn dynamic(handle: BodyHandle, position: Vec2) -> Body {
+        let mut body = Body::new_dynamic(handle);
+        body.set_mass_properties(1.0, 1.0);
+        body.set_position(position);
+        body
+    }
+
+    fn manifold_between(
+        handle_a: BodyHandle,
+        handle_b: BodyHandle,
+        contacts: Vec<Contact>,
+    ) -> ContactManifold {
+        let mut manifold = ContactManifold::between(
+            handle_a,
+            handle_b,
+            ColliderHandle::null(),
+            ColliderHandle::null(),
+        );
+        for contact in contacts {
+            manifold.add_contact(
+                contact.position(),
+                contact.normal(),
+                contact.penetration(),
+                0.0,
+                0.0,
+                contact.contact_id(),
+            );
+        }
+        manifold.set_friction(0.5);
+        manifold.set_restitution(0.0);
+        manifold
+    }
 
     #[test]
     fn test_construction() {
@@ -518,207 +522,358 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_mass() {
-        let solver = SequentialImpulseSolver::default();
+    fn test_effective_mass_of_two_equal_bodies() {
+        let a = dynamic(BodyHandle::new(1, 0), Vec2::zero());
+        let b = dynamic(BodyHandle::new(2, 0), Vec2::zero());
 
-        let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_dynamic(handle_a);
-        body_a.set_mass_properties(10.0, 5.0);
+        let mass = effective_mass(&a, &b, Vec2::unit_x(), Vec2::zero(), Vec2::zero());
 
-        let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_dynamic(handle_b);
-        body_b.set_mass_properties(10.0, 5.0);
-
-        let normal = Vec2::new(1.0, 0.0);
-        let ra = Vec2::new(0.0, 0.0);
-        let rb = Vec2::new(0.0, 0.0);
-
-        let effective_mass = solver.calculate_effective_mass(&body_a, &body_b, normal, ra, rb);
-        
-        // For two bodies with mass 10, inv_mass = 0.1 each
-        // effective_mass = 1 / (0.1 + 0.1) = 5.0
-        assert!(approx_eq(effective_mass, 5.0, 1e-5));
+        // 1 / (1 + 1) = 0.5
+        assert!((mass - 0.5).abs() < 1e-5);
     }
 
     #[test]
-    fn test_effective_mass_with_inertia() {
-        let solver = SequentialImpulseSolver::default();
+    fn test_effective_mass_ignores_static_bodies() {
+        let a = dynamic(BodyHandle::new(1, 0), Vec2::zero());
+        let mut b = Body::new_static(BodyHandle::new(2, 0));
+        b.set_position(Vec2::zero());
 
-        let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_dynamic(handle_a);
-        body_a.set_mass_properties(10.0, 5.0);
+        let mass = effective_mass(&a, &b, Vec2::unit_x(), Vec2::zero(), Vec2::zero());
 
-        let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_dynamic(handle_b);
-        body_b.set_mass_properties(10.0, 5.0);
-
-        let normal = Vec2::new(0.0, 1.0);
-        let ra = Vec2::new(1.0, 0.0); // 1 unit from center
-        let rb = Vec2::new(0.0, 0.0);
-
-        let effective_mass = solver.calculate_effective_mass(&body_a, &body_b, normal, ra, rb);
-        
-        // ra.cross(normal) = (1,0).cross(0,1) = 1*1 - 0*0 = 1
-        // ra_term = 1^2 * (1/5) = 0.2
-        // effective_mass = 1 / (0.1 + 0.1 + 0.2 + 0) = 1 / 0.4 = 2.5
-        assert!(approx_eq(effective_mass, 2.5, 1e-5));
+        // 1 / (1 + 0) = 1
+        assert!((mass - 1.0).abs() < 1e-5);
     }
 
     #[test]
-    fn test_relative_velocity() {
-        let solver = SequentialImpulseSolver::default();
+    fn test_relative_velocity_includes_rotation() {
+        let mut a = dynamic(BodyHandle::new(1, 0), Vec2::zero());
+        a.set_angular_velocity(2.0);
+        let b = dynamic(BodyHandle::new(2, 0), Vec2::zero());
 
-        let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_dynamic(handle_a);
-        body_a.set_linear_velocity(Vec2::new(1.0, 0.0));
-        body_a.set_angular_velocity(0.0);
+        // The result is the velocity of B relative to A, so the rotation of A
+        // shows up with a negative sign: r = (1, 0) gives omega x r = (0, 2)
+        let velocity = relative_velocity(&a, &b, Vec2::new(1.0, 0.0), Vec2::zero());
 
-        let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_dynamic(handle_b);
-        body_b.set_linear_velocity(Vec2::new(0.0, 0.0));
-        body_b.set_angular_velocity(0.0);
+        assert!((velocity.x).abs() < 1e-5);
+        assert!((velocity.y + 2.0).abs() < 1e-5);
 
-        let contact_point = Vec2::new(0.0, 0.0);
-        let relative_velocity = solver.calculate_relative_velocity(&body_a, &body_b, contact_point);
-        
-        assert_eq!(relative_velocity, Vec2::new(1.0, 0.0));
+        // Swapping the bodies flips the sign
+        let velocity = relative_velocity(&b, &a, Vec2::zero(), Vec2::new(1.0, 0.0));
+        assert!((velocity.y - 2.0).abs() < 1e-5);
     }
 
     #[test]
-    fn test_solve_empty() {
-        let solver = SequentialImpulseSolver::default();
-        let mut bodies: Vec<Option<Body>> = Vec::new();
-        let mut manifolds: Vec<ContactManifold> = Vec::new();
+    fn test_two_bodies_mut_returns_distinct_bodies() {
+        let mut bodies = vec![
+            Some(dynamic(BodyHandle::new(1, 0), Vec2::zero())),
+            Some(dynamic(BodyHandle::new(2, 0), Vec2::new(1.0, 0.0))),
+        ];
 
-        solver.solve_contacts(&mut bodies, &mut manifolds, 1.0 / 60.0);
-        // Should not panic
+        let (a, b) = two_bodies_mut(&mut bodies, 0, 1).expect("distinct bodies");
+        assert_eq!(a.handle(), BodyHandle::new(1, 0));
+        assert_eq!(b.handle(), BodyHandle::new(2, 0));
+
+        assert!(two_bodies_mut(&mut bodies, 1, 1).is_none());
+        assert!(two_bodies_mut(&mut bodies, 0, 7).is_none());
     }
 
     #[test]
-    fn test_solve_single_contact() {
-        let solver = SequentialImpulseSolver::new(
-            SolverConfig::new()
-                .with_velocity_iterations(1)
-                .with_position_iterations(0)
-                .with_warm_starting(false)
-        );
-
+    fn test_solver_stops_approaching_bodies() {
         let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_dynamic(handle_a);
-        body_a.set_position(Vec2::new(0.0, 0.0));
-        body_a.set_mass_properties(1.0, 0.5);
-        body_a.set_linear_velocity(Vec2::new(0.0, -1.0));
-
         let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_static(handle_b);
-        body_b.set_position(Vec2::new(0.0, -1.0));
 
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(0.0, -0.5),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            super::super::ContactId::new(0, 0),
-        );
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        body_a.set_linear_velocity(Vec2::new(0.0, -5.0));
+        let body_b = Body::new_static(handle_b);
 
-        let mut bodies = vec![Some(body_a), Some(body_b)];
-        let mut manifolds = vec![manifold];
-
-        solver.solve_contacts(&mut bodies, &mut manifolds, 1.0 / 60.0);
-
-        // Body A should have bounced (velocity should be positive now)
-        let body_a = bodies[0].as_ref().unwrap();
-        assert!(body_a.linear_velocity().y > 0.0, 
-                "Body should bounce upward after collision");
-    }
-
-    #[test]
-    fn test_position_correction() {
-        let solver = SequentialImpulseSolver::new(
-            SolverConfig::new()
-                .with_velocity_iterations(0)
-                .with_position_iterations(1)
-                .with_baumgarte_factor(0.2)
-                .with_max_position_correction(0.1)
-        );
-
-        let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_dynamic(handle_a);
-        body_a.set_position(Vec2::new(0.0, 0.0));
-        body_a.set_mass_properties(1.0, 0.5);
-
-        let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_dynamic(handle_b);
-        body_b.set_position(Vec2::new(0.0, -0.5));
-        body_b.set_mass_properties(1.0, 0.5);
-
-        let mut manifold = ContactManifold::new();
-        // Penetration of 0.5 (bodies are overlapping by 0.5)
-        manifold.add_contact(
-            Vec2::new(0.0, -0.25),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            super::super::ContactId::new(0, 0),
-        );
-
-        let mut bodies = vec![Some(body_a), Some(body_b)];
-        let mut manifolds = vec![manifold];
-
-        let original_pos_a = bodies[0].as_ref().unwrap().position();
-        let original_pos_b = bodies[1].as_ref().unwrap().position();
-
-        solver.solve_contacts(&mut bodies, &mut manifolds, 1.0 / 60.0);
-
-        // Bodies should have moved apart slightly
-        let new_pos_a = bodies[0].as_ref().unwrap().position();
-        let new_pos_b = bodies[1].as_ref().unwrap().position();
-
-        let separation = (new_pos_a.y - new_pos_b.y) - (original_pos_a.y - original_pos_b.y);
-        assert!(separation > 0.0, "Position correction should increase separation");
-    }
-
-    #[test]
-    fn test_static_body_no_movement() {
-        let solver = SequentialImpulseSolver::default();
-
-        let handle_a = BodyHandle::new(1, 0);
-        let mut body_a = Body::new_static(handle_a);
-        body_a.set_position(Vec2::new(0.0, 0.0));
-
-        let handle_b = BodyHandle::new(2, 0);
-        let mut body_b = Body::new_dynamic(handle_b);
-        body_b.set_position(Vec2::new(0.0, 1.0));
-        body_b.set_mass_properties(1.0, 0.5);
-        body_b.set_linear_velocity(Vec2::new(0.0, -1.0));
-
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
+        let contact = Contact::without_impulses(
             Vec2::new(0.0, 0.5),
-            Vec2::new(0.0, 1.0),
-            0.5,
+            Vec2::new(0.0, -1.0),
             0.0,
-            0.0,
-            super::super::ContactId::new(0, 0),
+            ContactId::new(0, 0),
         );
 
-        let original_pos_a = body_a.position();
-        let original_vel_b = body_b.linear_velocity();
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
 
         let mut bodies = vec![Some(body_a), Some(body_b)];
-        let mut manifolds = vec![manifold];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
 
-        solver.solve_contacts(&mut bodies, &mut manifolds, 1.0 / 60.0);
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
 
-        // Static body should not move
-        let new_pos_a = bodies[0].as_ref().unwrap().position();
-        assert_eq!(new_pos_a, original_pos_a);
+        let a = bodies[0].as_ref().expect("body a");
+        // The body must no longer be moving into the ground
+        assert!(
+            a.linear_velocity().y >= -1e-3,
+            "velocity {}",
+            a.linear_velocity().y
+        );
+    }
 
-        // Dynamic body should bounce
-        let new_vel_b = bodies[1].as_ref().unwrap().linear_velocity();
-        assert!(new_vel_b.y > original_vel_b.y, "Dynamic body should bounce");
+    #[test]
+    fn test_solver_never_pulls_bodies_together() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        // Two bodies touching but separating: no impulse must be applied
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        body_a.set_linear_velocity(Vec2::new(0.0, 5.0));
+        let mut body_b = dynamic(handle_b, Vec2::new(0.0, 0.0));
+        body_b.set_linear_velocity(Vec2::new(0.0, -5.0));
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.0,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        assert!((bodies[0].as_ref().expect("a").linear_velocity().y - 5.0).abs() < 1e-3);
+        assert!((bodies[1].as_ref().expect("b").linear_velocity().y + 5.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_friction_slows_sliding_body() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        // A small downward component is needed, otherwise the normal impulse
+        // (and therefore the friction cone) is empty.
+        body_a.set_linear_velocity(Vec2::new(4.0, -1.0));
+        let body_b = Body::new_static(handle_b);
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.0,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+        manifold.set_friction(1.0);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        let a = bodies[0].as_ref().expect("body a");
+        assert!(a.linear_velocity().x < 4.0, "friction should slow the body");
+        // Vertical velocity is untouched by the tangent impulse
+        assert!(a.linear_velocity().y.abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_restitution_makes_bodies_bounce() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        body_a.set_linear_velocity(Vec2::new(0.0, -5.0));
+        let body_b = Body::new_static(handle_b);
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.0,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+        manifold.set_restitution(0.8);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        let config = SolverConfig::default().with_restitution_threshold(0.1);
+        SequentialImpulseSolver::new(config).solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        let a = bodies[0].as_ref().expect("body a");
+        // Restitution 0.8 on a 5 m/s impact leaves about 4 m/s of separation
+        assert!(
+            a.linear_velocity().y > 3.0,
+            "velocity {}",
+            a.linear_velocity().y
+        );
+    }
+
+    #[test]
+    fn test_sensors_generate_no_impulses() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        body_a.set_linear_velocity(Vec2::new(0.0, -5.0));
+        let body_b = Body::new_static(handle_b);
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.1,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+        manifold.set_sensor(true);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        let a = bodies[0].as_ref().expect("body a");
+        assert!((a.linear_velocity().y + 5.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_unknown_and_equal_handles_are_skipped() {
+        let mut bodies: Vec<Option<Body>> =
+            vec![Some(dynamic(BodyHandle::new(1, 0), Vec2::zero()))];
+        let mut indices = HashMap::new();
+        indices.insert(BodyHandle::new(1, 0), 0);
+
+        let contact = Contact::without_impulses(
+            Vec2::zero(),
+            Vec2::new(0.0, -1.0),
+            0.0,
+            ContactId::new(0, 0),
+        );
+
+        // Unknown body handle
+        let mut manifold =
+            manifold_between(BodyHandle::new(1, 0), BodyHandle::new(9, 0), vec![contact]);
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        // Same body on both sides
+        let mut manifold =
+            manifold_between(BodyHandle::new(1, 0), BodyHandle::new(1, 0), vec![contact]);
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        let body = bodies[0].as_ref().expect("body");
+        assert_eq!(body.linear_velocity(), Vec2::zero());
+    }
+
+    #[test]
+    fn test_penetration_is_relaxed() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        let body_a = dynamic(handle_a, Vec2::new(0.0, 0.9));
+        let body_b = Body::new_static(handle_b);
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.2,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        SequentialImpulseSolver::default().solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            1.0 / 60.0,
+            &indices,
+        );
+
+        let a = bodies[0].as_ref().expect("body a");
+        assert!(
+            a.position().y > 0.9,
+            "body should be pushed out, y = {}",
+            a.position().y
+        );
+    }
+
+    #[test]
+    fn test_zero_timestep_is_ignored() {
+        let handle_a = BodyHandle::new(1, 0);
+        let handle_b = BodyHandle::new(2, 0);
+
+        let mut body_a = dynamic(handle_a, Vec2::new(0.0, 1.0));
+        body_a.set_linear_velocity(Vec2::new(0.0, -5.0));
+        let body_b = Body::new_static(handle_b);
+
+        let contact = Contact::without_impulses(
+            Vec2::new(0.0, 0.5),
+            Vec2::new(0.0, -1.0),
+            0.0,
+            ContactId::new(0, 0),
+        );
+        let mut manifold = manifold_between(handle_a, handle_b, vec![contact]);
+
+        let mut bodies = vec![Some(body_a), Some(body_b)];
+        let mut indices = HashMap::new();
+        indices.insert(handle_a, 0);
+        indices.insert(handle_b, 1);
+
+        let solver = SequentialImpulseSolver::default();
+        solver.solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            0.0,
+            &indices,
+        );
+        solver.solve_contacts(
+            &mut bodies,
+            std::slice::from_mut(&mut manifold),
+            f32::NAN,
+            &indices,
+        );
+
+        let a = bodies[0].as_ref().expect("body a");
+        assert!((a.linear_velocity().y + 5.0).abs() < 1e-3);
     }
 }

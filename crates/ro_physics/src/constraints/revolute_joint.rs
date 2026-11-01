@@ -5,11 +5,11 @@
 
 use std::fmt;
 
+use super::{BaseConstraint, Constraint, ConstraintHandle, ConstraintType};
 use crate::bodies::Body;
-use crate::constants::{EPSILON, PI};
-use crate::math::{Rot2, Transform, Vec2};
 use crate::bodies::BodyHandle;
-use super::{BaseConstraint, Constraint, ConstraintHandle};
+use crate::constants::{EPSILON, MAX_CORRECTION_SPEED, PI};
+use crate::math::Vec2;
 
 /// A revolute joint constraint.
 ///
@@ -17,7 +17,10 @@ use super::{BaseConstraint, Constraint, ConstraintHandle};
 /// only relative rotation about that point. The bodies cannot translate
 /// relative to each other, but can rotate freely (or within limits).
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct RevoluteJoint {
     /// Base constraint data
     base: BaseConstraint,
@@ -39,16 +42,28 @@ pub struct RevoluteJoint {
     motor_enabled: bool,
     /// Accumulated impulse for position correction
     position_impulse: Vec2,
+    /// Accumulated impulse for the angle limits
+    angle_impulse: f32,
     /// Accumulated impulse for motor
     motor_impulse: f32,
-    /// Effective mass for translation
-    translation_effective_mass: f32,
+    /// Effective mass matrix for the translation constraint (`[0][0]`)
+    #[cfg_attr(feature = "serialization", serde(default))]
+    mass_11: f32,
+    /// Effective mass matrix for the translation constraint (`[0][1]`/`[1][0]`)
+    #[cfg_attr(feature = "serialization", serde(default))]
+    mass_12: f32,
+    /// Effective mass matrix for the translation constraint (`[1][1]`)
+    #[cfg_attr(feature = "serialization", serde(default))]
+    mass_22: f32,
     /// Effective mass for rotation
     rotation_effective_mass: f32,
     /// Bias for position correction
     position_bias: Vec2,
     /// Bias for angle correction
     angle_bias: f32,
+    /// Timestep of the current solve, used to convert torques into impulses
+    #[cfg_attr(feature = "serialization", serde(default))]
+    current_dt: f32,
 }
 
 impl RevoluteJoint {
@@ -72,11 +87,15 @@ impl RevoluteJoint {
             motor_speed: 0.0,
             motor_enabled: false,
             position_impulse: Vec2::zero(),
+            angle_impulse: 0.0,
             motor_impulse: 0.0,
-            translation_effective_mass: 0.0,
+            mass_11: 0.0,
+            mass_12: 0.0,
+            mass_22: 0.0,
             rotation_effective_mass: 0.0,
             position_bias: Vec2::zero(),
             angle_bias: 0.0,
+            current_dt: 0.0,
         }
     }
 
@@ -103,11 +122,15 @@ impl RevoluteJoint {
             motor_speed: 0.0,
             motor_enabled: false,
             position_impulse: Vec2::zero(),
+            angle_impulse: 0.0,
             motor_impulse: 0.0,
-            translation_effective_mass: 0.0,
+            mass_11: 0.0,
+            mass_12: 0.0,
+            mass_22: 0.0,
             rotation_effective_mass: 0.0,
             position_bias: Vec2::zero(),
             angle_bias: 0.0,
+            current_dt: 0.0,
         }
     }
 
@@ -254,13 +277,17 @@ impl RevoluteJoint {
         angle_b - angle_a
     }
 
-    /// Get the world anchor point (should be the same for both bodies)
+    /// Get the world anchor point
+    ///
+    /// Both anchors should coincide when the constraint is satisfied, so the
+    /// midpoint is returned to stay symmetric when they have drifted apart.
     #[inline]
     #[must_use]
     pub fn world_anchor(&self, body_a: &Body, body_b: &Body) -> Vec2 {
-        // The world anchor should be the same for both bodies if the constraint is satisfied
-        // For now, return the anchor from body A
-        body_a.transform().transform_point(self.local_anchor_a)
+        let anchor_a = body_a.transform().transform_point(self.local_anchor_a);
+        let anchor_b = body_b.transform().transform_point(self.local_anchor_b);
+
+        (anchor_a + anchor_b) * 0.5
     }
 
     /// Check if the joint is at its lower limit
@@ -294,6 +321,10 @@ impl RevoluteJoint {
 }
 
 impl Constraint for RevoluteJoint {
+    fn kind(&self) -> ConstraintType {
+        ConstraintType::Revolute
+    }
+
     fn handle(&self) -> ConstraintHandle {
         self.base.handle()
     }
@@ -315,10 +346,15 @@ impl Constraint for RevoluteJoint {
     }
 
     fn pre_solve(&mut self, body_a: &Body, body_b: &Body, dt: f32) {
+        self.current_dt = dt.max(0.0);
+
         if !self.base.is_enabled() {
             self.position_impulse = Vec2::zero();
+            self.angle_impulse = 0.0;
             self.motor_impulse = 0.0;
-            self.translation_effective_mass = 0.0;
+            self.mass_11 = 0.0;
+            self.mass_12 = 0.0;
+            self.mass_22 = 0.0;
             self.rotation_effective_mass = 0.0;
             self.position_bias = Vec2::zero();
             self.angle_bias = 0.0;
@@ -333,15 +369,14 @@ impl Constraint for RevoluteJoint {
         let ra = anchor_a - body_a.position();
         let rb = anchor_b - body_b.position();
 
-        // Calculate effective mass for translation constraint
-        self.translation_effective_mass = self.calculate_translation_effective_mass(
-            body_a, body_b, ra, rb
-        );
+        // Effective mass matrix of the translation (point-to-point) constraint
+        let mass = self.calculate_translation_mass(body_a, body_b, ra, rb);
+        self.mass_11 = mass.0;
+        self.mass_12 = mass.1;
+        self.mass_22 = mass.2;
 
         // Calculate effective mass for rotation constraint
-        self.rotation_effective_mass = self.calculate_rotation_effective_mass(
-            body_a, body_b
-        );
+        self.rotation_effective_mass = self.calculate_rotation_effective_mass(body_a, body_b);
 
         // Calculate position bias
         let position_error = anchor_b - anchor_a;
@@ -355,6 +390,8 @@ impl Constraint for RevoluteJoint {
         } else {
             self.angle_bias = 0.0;
         }
+
+        self.angle_impulse = 0.0;
     }
 
     fn solve(&mut self, body_a: &mut Body, body_b: &mut Body) {
@@ -362,16 +399,9 @@ impl Constraint for RevoluteJoint {
             return;
         }
 
-        // Get world anchors
-        let anchor_a = body_a.transform().transform_point(self.local_anchor_a);
-        let anchor_b = body_b.transform().transform_point(self.local_anchor_b);
-
         // Solve position constraint (prevent translation)
-        if self.translation_effective_mass > EPSILON {
-            let position_error = anchor_b - anchor_a;
-            let position_impulse = self.solve_position_constraint(
-                body_a, body_b, anchor_a, anchor_b, position_error
-            );
+        if body_a.is_dynamic() || body_b.is_dynamic() {
+            let position_impulse = self.solve_position_constraint(body_a, body_b);
             self.position_impulse += position_impulse;
         }
 
@@ -380,7 +410,7 @@ impl Constraint for RevoluteJoint {
             let angle = self.current_angle(body_a, body_b);
             let angle_error = self.clamp_angle(angle) - angle;
             let angle_impulse = self.solve_angle_constraint(body_a, body_b, angle_error);
-            self.motor_impulse += angle_impulse;
+            self.angle_impulse += angle_impulse;
         }
 
         // Solve motor constraint
@@ -393,6 +423,7 @@ impl Constraint for RevoluteJoint {
     fn post_solve(&mut self) {
         // Clear accumulated impulses or keep for warm starting
         self.position_impulse = Vec2::zero();
+        self.angle_impulse = 0.0;
         self.motor_impulse = 0.0;
     }
 
@@ -401,44 +432,54 @@ impl Constraint for RevoluteJoint {
     }
 
     fn reaction_torque(&self) -> f32 {
-        self.motor_impulse
+        self.motor_impulse + self.angle_impulse
     }
 }
 
 impl RevoluteJoint {
-    /// Calculate the effective mass for translation constraint
+    /// Calculate the effective mass matrix of the translation constraint
+    ///
+    /// Returns `(k11, k12, k22)` of the symmetric 2x2 matrix `K` that maps an
+    /// impulse applied on body B at `rb` (and its opposite on body A at `ra`)
+    /// to the resulting change of the relative velocity at the anchors.
     #[inline]
-    fn calculate_translation_effective_mass(
+    fn calculate_translation_mass(
         &self,
         body_a: &Body,
         body_b: &Body,
         ra: Vec2,
         rb: Vec2,
-    ) -> f32 {
+    ) -> (f32, f32, f32) {
         let inv_mass_a = body_a.inv_mass();
         let inv_mass_b = body_b.inv_mass();
         let inv_inertia_a = body_a.inv_inertia();
         let inv_inertia_b = body_b.inv_inertia();
 
-        // For revolute joint, we need to constrain both x and y translation
-        // We use a combined effective mass
-        let ra_cross_x = ra.cross(Vec2::unit_x());
-        let ra_cross_y = ra.cross(Vec2::unit_y());
-        let rb_cross_x = rb.cross(Vec2::unit_x());
-        let rb_cross_y = rb.cross(Vec2::unit_y());
+        let k11 =
+            inv_mass_a + inv_mass_b + inv_inertia_a * ra.y * ra.y + inv_inertia_b * rb.y * rb.y;
+        let k12 = -inv_inertia_a * ra.x * ra.y - inv_inertia_b * rb.x * rb.y;
+        let k22 =
+            inv_mass_a + inv_mass_b + inv_inertia_a * ra.x * ra.x + inv_inertia_b * rb.x * rb.x;
 
-        // Effective mass for x-axis
-        let eff_mass_x = 1.0 / (inv_mass_a + inv_mass_b
-            + ra_cross_x * ra_cross_x * inv_inertia_a
-            + rb_cross_x * rb_cross_x * inv_inertia_b);
+        (k11, k12, k22)
+    }
 
-        // Effective mass for y-axis
-        let eff_mass_y = 1.0 / (inv_mass_a + inv_mass_b
-            + ra_cross_y * ra_cross_y * inv_inertia_a
-            + rb_cross_y * rb_cross_y * inv_inertia_b);
+    /// Invert the effective mass matrix and apply it to a velocity
+    ///
+    /// Returns `None` when the constraint cannot affect either body.
+    #[inline]
+    fn solve_mass(&self, velocity: Vec2) -> Option<Vec2> {
+        let det = self.mass_11 * self.mass_22 - self.mass_12 * self.mass_12;
 
-        // Use the minimum for stability
-        eff_mass_x.min(eff_mass_y)
+        if det <= EPSILON {
+            return None;
+        }
+
+        let inv_det = 1.0 / det;
+        Some(Vec2::new(
+            (self.mass_22 * velocity.x - self.mass_12 * velocity.y) * inv_det,
+            (self.mass_11 * velocity.y - self.mass_12 * velocity.x) * inv_det,
+        ))
     }
 
     /// Calculate the effective mass for rotation constraint
@@ -459,7 +500,15 @@ impl RevoluteJoint {
     fn calculate_position_bias(&self, error: Vec2, dt: f32) -> Vec2 {
         // Baumgarte factor
         const BAUMGARTE_FACTOR: f32 = 0.2;
-        error * (BAUMGARTE_FACTOR / dt)
+
+        if dt <= EPSILON {
+            return Vec2::zero();
+        }
+
+        (error * (BAUMGARTE_FACTOR / dt)).clamp(
+            Vec2::new(-MAX_CORRECTION_SPEED, -MAX_CORRECTION_SPEED),
+            Vec2::new(MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED),
+        )
     }
 
     /// Calculate angle bias for Baumgarte stabilization
@@ -467,7 +516,12 @@ impl RevoluteJoint {
     fn calculate_angle_bias(&self, error: f32, dt: f32) -> f32 {
         // Baumgarte factor
         const BAUMGARTE_FACTOR: f32 = 0.2;
-        error * (BAUMGARTE_FACTOR / dt)
+
+        if dt <= EPSILON {
+            return 0.0;
+        }
+
+        (error * (BAUMGARTE_FACTOR / dt)).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED)
     }
 
     /// Clamp angle to be within limits
@@ -476,50 +530,72 @@ impl RevoluteJoint {
         angle.clamp(self.lower_angle, self.upper_angle)
     }
 
-    /// Solve position constraint
+    /// Solve the point-to-point (translation) constraint
+    ///
+    /// The anchors are driven together with a velocity constraint plus the
+    /// Baumgarte bias, which keeps the joint from drifting apart.
     #[inline]
-    fn solve_position_constraint(
-        &self,
-        body_a: &mut Body,
-        body_b: &mut Body,
-        anchor_a: Vec2,
-        anchor_b: Vec2,
-        position_error: Vec2,
-    ) -> Vec2 {
-        if self.translation_effective_mass <= EPSILON {
+    fn solve_position_constraint(&self, body_a: &mut Body, body_b: &mut Body) -> Vec2 {
+        let anchor_a = body_a.transform().transform_point(self.local_anchor_a);
+        let anchor_b = body_b.transform().transform_point(self.local_anchor_b);
+
+        let relative_velocity =
+            body_b.velocity_at_point(anchor_b) - body_a.velocity_at_point(anchor_a);
+
+        // Desired relative velocity: cancel the drift between the anchors
+        let target_velocity = -self.position_bias;
+
+        let Some(impulse) = self.solve_mass(target_velocity - relative_velocity) else {
             return Vec2::zero();
-        }
+        };
 
-        // Calculate impulse
-        let impulse = -position_error * self.translation_effective_mass;
-
-        // Apply impulse
         if body_a.is_dynamic() {
-            body_a.add_impulse_at_point(-impulse, anchor_a);
+            body_a.add_impulse_at_point_no_wake(-impulse, anchor_a);
         }
         if body_b.is_dynamic() {
-            body_b.add_impulse_at_point(impulse, anchor_b);
+            body_b.add_impulse_at_point_no_wake(impulse, anchor_b);
         }
 
         impulse
     }
 
-    /// Solve angle constraint
+    /// Solve the angle limit constraint
+    ///
+    /// `angle_error` is the signed distance from the allowed range, so the
+    /// joint is driven back towards the clamped angle.
     #[inline]
-    fn solve_angle_constraint(&self, body_a: &mut Body, body_b: &mut Body, angle_error: f32) -> f32 {
+    fn solve_angle_constraint(
+        &self,
+        body_a: &mut Body,
+        body_b: &mut Body,
+        angle_error: f32,
+    ) -> f32 {
         if self.rotation_effective_mass <= EPSILON {
             return 0.0;
         }
 
-        // Calculate impulse
-        let impulse = -angle_error * self.rotation_effective_mass;
+        let relative_velocity = body_b.angular_velocity() - body_a.angular_velocity();
+        let target_velocity = self.angle_bias;
 
-        // Apply impulse
+        // The accumulated impulse may only push the joint towards the limit,
+        // never away from it, so it is clamped to the sign of the error.
+        let mut impulse = (target_velocity - relative_velocity) * self.rotation_effective_mass;
+
+        if angle_error > 0.0 {
+            // Below the lower limit: the joint may only push the angle up
+            impulse = impulse.max(0.0);
+        } else if angle_error < 0.0 {
+            // Above the upper limit: the joint may only push the angle down
+            impulse = impulse.min(0.0);
+        } else {
+            impulse = 0.0;
+        }
+
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
 
         impulse
@@ -544,16 +620,16 @@ impl RevoluteJoint {
         // Calculate impulse
         let impulse = velocity_error * self.rotation_effective_mass;
 
-        // Clamp to maximum torque
-        let max_impulse = self.max_motor_torque * crate::constants::MIN_POSITIVE;
+        // Clamp to maximum torque (a torque is a force applied over `dt`)
+        let max_impulse = self.max_motor_torque * self.current_dt;
         let impulse = impulse.clamp(-max_impulse, max_impulse);
 
         // Apply impulse
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
 
         impulse
@@ -579,6 +655,7 @@ mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
     use crate::math::utils::approx_eq;
+    use crate::math::Rot2;
 
     #[test]
     fn test_construction() {
@@ -606,7 +683,9 @@ mod tests {
         let body_b = BodyHandle::new(2, 0);
 
         let joint = RevoluteJoint::new_at_points(
-            handle, body_a, body_b,
+            handle,
+            body_a,
+            body_b,
             Vec2::new(1.0, 0.0),
             Vec2::new(-1.0, 0.0),
         );
@@ -705,8 +784,9 @@ mod tests {
 
         let joint = RevoluteJoint::new(handle, body_a, body_b, Vec2::new(1.0, 2.0));
 
+        // Anchors: (10, 20) + (1, 2) and (30, 40) + (1, 2)
         let anchor = joint.world_anchor(&body_a_obj, &body_b_obj);
-        assert_eq!(anchor, Vec2::new(11.0, 22.0));
+        assert_eq!(anchor, Vec2::new(21.0, 32.0));
     }
 
     #[test]
@@ -715,7 +795,7 @@ mod tests {
         let body_a = BodyHandle::new(1, 0);
         let body_b = BodyHandle::new(2, 0);
 
-        let mut body_a_obj = Body::new_dynamic(body_a);
+        let body_a_obj = Body::new_dynamic(body_a);
         let mut body_b_obj = Body::new_dynamic(body_b);
 
         let mut joint = RevoluteJoint::new(handle, body_a, body_b, Vec2::zero());

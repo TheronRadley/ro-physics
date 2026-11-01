@@ -4,7 +4,10 @@
 
 /// Configuration for the constraint solver.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct SolverConfig {
     /// Number of velocity iterations
     pub velocity_iterations: usize,
@@ -112,10 +115,37 @@ impl Default for SolverConfig {
     }
 }
 
+impl SolverConfig {
+    /// Replace non-finite and out-of-range values with the defaults
+    ///
+    /// The fields of this struct are public, so a caller can build a config
+    /// that would otherwise poison every step with NaN. `World::new` runs this
+    /// before storing the config.
+    #[inline]
+    #[must_use]
+    pub fn sanitize(mut self) -> Self {
+        let defaults = Self::default();
+
+        if !self.baumgarte_factor.is_finite() {
+            self.baumgarte_factor = defaults.baumgarte_factor;
+        }
+        self.baumgarte_factor = self.baumgarte_factor.clamp(0.0, 1.0);
+
+        if !self.max_position_correction.is_finite() || self.max_position_correction < 0.0 {
+            self.max_position_correction = defaults.max_position_correction;
+        }
+
+        if !self.restitution_threshold.is_finite() || self.restitution_threshold < 0.0 {
+            self.restitution_threshold = defaults.restitution_threshold;
+        }
+
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::EPSILON;
 
     #[test]
     fn test_construction() {
@@ -160,7 +190,7 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = EPSILON) -> bool {
-        (a - b).abs() <= epsilon
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= crate::constants::EPSILON
     }
 }

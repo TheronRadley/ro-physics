@@ -5,15 +5,18 @@
 
 use std::fmt;
 
-use crate::bodies::{Body, BodyHandle};
-use crate::math::{Rot2, Transform, Vec2};
 use super::ConstraintHandle;
+use crate::bodies::{Body, BodyHandle};
+use crate::math::Vec2;
 
 /// A constraint that connects two bodies together.
 ///
 /// Constraints restrict the relative motion of bodies in specific ways.
 /// All constraint types implement this trait.
 pub trait Constraint: fmt::Debug + Send + Sync {
+    /// Which kind of constraint this is
+    fn kind(&self) -> ConstraintType;
+
     /// Get the constraint handle
     fn handle(&self) -> ConstraintHandle;
 
@@ -30,12 +33,7 @@ pub trait Constraint: fmt::Debug + Send + Sync {
     fn set_enabled(&mut self, enabled: bool);
 
     /// Pre-solve the constraint (calculate mass matrix, bias, etc.)
-    fn pre_solve(
-        &mut self,
-        body_a: &Body,
-        body_b: &Body,
-        dt: f32,
-    );
+    fn pre_solve(&mut self, body_a: &Body, body_b: &Body, dt: f32);
 
     /// Solve the constraint (apply impulses to satisfy the constraint)
     fn solve(&mut self, body_a: &mut Body, body_b: &mut Body);
@@ -56,6 +54,10 @@ pub trait Constraint: fmt::Debug + Send + Sync {
 
 /// Base struct for all constraints
 #[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct BaseConstraint {
     /// Handle to this constraint
     handle: ConstraintHandle,
@@ -73,11 +75,7 @@ impl BaseConstraint {
     /// Create a new base constraint
     #[inline]
     #[must_use]
-    pub const fn new(
-        handle: ConstraintHandle,
-        body_a: BodyHandle,
-        body_b: BodyHandle,
-    ) -> Self {
+    pub const fn new(handle: ConstraintHandle, body_a: BodyHandle, body_b: BodyHandle) -> Self {
         Self {
             handle,
             body_a,
@@ -136,23 +134,26 @@ impl BaseConstraint {
 }
 
 /// Enum of all constraint types
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum ConstraintType {
     /// Distance joint (point-to-point constraint)
-    DistanceJoint,
+    Distance,
     /// Revolute joint (hinge constraint)
-    RevoluteJoint,
+    Revolute,
     /// Motor joint (controlled rotation)
-    MotorJoint,
+    Motor,
 }
 
 impl fmt::Display for ConstraintType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConstraintType::DistanceJoint => write!(f, "DistanceJoint"),
-            ConstraintType::RevoluteJoint => write!(f, "RevoluteJoint"),
-            ConstraintType::MotorJoint => write!(f, "MotorJoint"),
+            ConstraintType::Distance => write!(f, "Distance"),
+            ConstraintType::Revolute => write!(f, "Revolute"),
+            ConstraintType::Motor => write!(f, "Motor"),
         }
     }
 }
@@ -160,8 +161,8 @@ impl fmt::Display for ConstraintType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constraints::ConstraintHandle;
     use crate::bodies::BodyHandle;
+    use crate::constraints::ConstraintHandle;
 
     #[test]
     fn test_base_constraint() {
@@ -180,12 +181,12 @@ mod tests {
 
     #[test]
     fn test_constraint_type_display() {
-        let distance = ConstraintType::DistanceJoint;
-        let revolute = ConstraintType::RevoluteJoint;
-        let motor = ConstraintType::MotorJoint;
+        let distance = ConstraintType::Distance;
+        let revolute = ConstraintType::Revolute;
+        let motor = ConstraintType::Motor;
 
-        assert_eq!(format!("{}", distance), "DistanceJoint");
-        assert_eq!(format!("{}", revolute), "RevoluteJoint");
-        assert_eq!(format!("{}", motor), "MotorJoint");
+        assert_eq!(format!("{distance}"), "Distance");
+        assert_eq!(format!("{revolute}"), "Revolute");
+        assert_eq!(format!("{motor}"), "Motor");
     }
 }

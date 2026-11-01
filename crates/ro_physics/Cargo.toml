@@ -2,42 +2,38 @@
 name = "ro_physics"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.70"
 authors = ["Ro-Physics Team"]
-description = "A production-grade 2D rigid-body physics engine in Rust"
+description = "A 2D rigid-body physics engine in Rust"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/TheronRadley/ro-physics"
 keywords = ["physics", "2d", "rigid-body", "collision", "simulation"]
 categories = ["game-development", "simulation"]
 
 [dependencies]
-nalgebra = { workspace = true }
-approx = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 rand = { workspace = true }
-rand_distr = { workspace = true }
+
+# Optional serialization back-ends, enabled by the `serialization` feature.
+serde_json = { workspace = true, optional = true }
+ron = { workspace = true, optional = true }
+bincode = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+approx = { workspace = true }
+proptest = { workspace = true }
 
 [features]
 default = []
-serialization = ["serde/derive"]
+# Scene/state (de)serialization. Adds serde plus the JSON, RON and bincode
+# back-ends; the core engine stays dependency-light without it.
+serialization = ["dep:serde", "dep:serde_json", "dep:ron", "dep:bincode"]
 
 [lib]
 name = "ro_physics"
 path = "src/lib.rs"
-
-[[bench]]
-name = "math"
-harness = false
-
-[[bench]]
-name = "collision"
-harness = false
-
-[[bench]]
-name = "solver"
-harness = false
 
 [[bench]]
 name = "stress"

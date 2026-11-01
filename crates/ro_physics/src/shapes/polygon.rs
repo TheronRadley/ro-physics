@@ -7,67 +7,116 @@ use std::fmt;
 
 use crate::constants::EPSILON;
 use crate::geometry::Aabb;
-use crate::math::{Rot2, Transform, Vec2};
-use crate::shapes::{MassProperties, ShapeType, is_convex, normalize_winding};
+use crate::math::{Transform, Vec2};
+use crate::shapes::{is_convex, MassProperties, ShapeError, ShapeType};
 
 /// A convex polygon shape.
 ///
-/// Polygons are defined by a list of vertices in counter-clockwise order.
-/// The vertices are stored relative to the shape's local origin.
+/// Vertices are stored relative to the shape's local origin and are
+/// normalised to **counter-clockwise** winding on construction, so every edge
+/// normal in [`Polygon::normals`] points **outwards**.
+///
+/// # Invariants
+///
+/// * at least three, finite, non-degenerate vertices
+/// * convex, counter-clockwise winding
+/// * `normals[i]` is the outward unit normal of the edge
+///   `vertices[i] -> vertices[i + 1]`
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Polygon {
     /// Vertices of the polygon in counter-clockwise order
     pub vertices: Vec<Vec2>,
-    /// Edge normals (computed from vertices)
+    /// Outward unit edge normals (`normals[i]` belongs to edge `i`)
     pub normals: Vec<Vec2>,
-    /// Centroid of the polygon
+    /// Centroid (area centre) of the polygon
     pub centroid: Vec2,
-    /// Cached AABB in local space
-    local_aabb: Option<Aabb>,
 }
 
 impl Polygon {
+    /// Create a new polygon from vertices, validating the geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ShapeError`] if the polygon has fewer than three distinct
+    /// vertices, contains non-finite coordinates, is degenerate (zero area) or
+    /// is concave.
+    pub fn try_new(vertices: Vec<Vec2>) -> Result<Self, ShapeError> {
+        if vertices.len() < 3 {
+            return Err(ShapeError::TooFewVertices(vertices.len()));
+        }
+
+        for (index, vertex) in vertices.iter().enumerate() {
+            if !vertex.is_finite() {
+                return Err(ShapeError::NonFiniteVertex { index });
+            }
+            if !vertex.validate() {
+                return Err(ShapeError::OutOfRangeVertex { index });
+            }
+        }
+
+        let mut vertices = crate::shapes::utils::clean_polygon_vertices(&vertices);
+
+        if vertices.len() < 3 {
+            return Err(ShapeError::Degenerate);
+        }
+
+        // Normalise the winding so that the signed area is positive
+        // (counter-clockwise in a right-handed coordinate system).
+        if crate::shapes::utils::polygon_signed_area(&vertices) < 0.0 {
+            vertices.reverse();
+        }
+
+        if !is_convex(&vertices) {
+            return Err(ShapeError::Concave);
+        }
+
+        if crate::shapes::utils::polygon_area(&vertices) < EPSILON {
+            return Err(ShapeError::Degenerate);
+        }
+
+        let centroid = crate::shapes::utils::polygon_centroid(&vertices);
+        let normals = Self::compute_normals(&vertices);
+
+        Ok(Self {
+            vertices,
+            normals,
+            centroid,
+        })
+    }
+
     /// Create a new polygon from vertices
     ///
     /// # Panics
     ///
-    /// Panics if the polygon is not convex or has fewer than 3 vertices.
+    /// Panics if the polygon is invalid (see [`Polygon::try_new`]). Use
+    /// [`Polygon::try_new`] when the vertices come from an untrusted source
+    /// such as a scene file.
     #[inline]
     #[must_use]
     pub fn new(vertices: Vec<Vec2>) -> Self {
-        debug_assert!(
-            vertices.len() >= 3,
-            "Polygon must have at least 3 vertices"
-        );
-        debug_assert!(
-            is_convex(&vertices),
-            "Polygon must be convex"
-        );
-
-        let mut vertices = vertices;
-        
-        // Normalize winding to counter-clockwise
-        normalize_winding(&mut vertices);
-        
-        // Compute centroid
-        let centroid = super::utils::polygon_centroid(&vertices);
-        
-        // Compute normals
-        let normals = Self::compute_normals(&vertices);
-        
-        Self {
-            vertices,
-            normals,
-            centroid,
-            local_aabb: None,
+        match Self::try_new(vertices) {
+            Ok(polygon) => polygon,
+            Err(error) => panic!("invalid polygon: {error}"),
         }
     }
 
-    /// Create a polygon from a rectangle
+    /// Create a polygon from a rectangle centred on the local origin
+    ///
+    /// # Panics
+    ///
+    /// Panics if the width or height is not positive and finite.
     #[inline]
     #[must_use]
     pub fn from_rectangle(width: f32, height: f32) -> Self {
+        assert!(
+            width > 0.0 && width.is_finite() && height > 0.0 && height.is_finite(),
+            "Polygon::from_rectangle requires positive, finite dimensions"
+        );
+
         let half_width = width / 2.0;
         let half_height = height / 2.0;
 
@@ -81,7 +130,11 @@ impl Polygon {
         Self::new(vertices)
     }
 
-    /// Create a polygon from a box (axis-aligned rectangle)
+    /// Create a polygon from a box (axis-aligned rectangle) given by half extents
+    ///
+    /// # Panics
+    ///
+    /// Panics if either half extent is not positive and finite.
     #[inline]
     #[must_use]
     pub fn from_box(half_extents: Vec2) -> Self {
@@ -95,7 +148,7 @@ impl Polygon {
         &self.vertices
     }
 
-    /// Get the normals
+    /// Get the outward unit edge normals
     #[inline]
     #[must_use]
     pub fn normals(&self) -> &[Vec2] {
@@ -123,17 +176,17 @@ impl Polygon {
         self.vertices.len()
     }
 
-    /// Calculate the moment of inertia for a given mass
+    /// Calculate the moment of inertia about the centroid for a given mass
     #[inline]
     #[must_use]
-    pub fn inertia(self, mass: f32) -> f32 {
-        super::utils::polygon_inertia(mass, &self.vertices, self.centroid)
+    pub fn inertia(&self, mass: f32) -> f32 {
+        crate::shapes::utils::polygon_inertia(mass, &self.vertices, self.centroid)
     }
 
     /// Calculate mass properties for a given density
     #[inline]
     #[must_use]
-    pub fn mass_properties(self, density: f32) -> MassProperties {
+    pub fn mass_properties(&self, density: f32) -> MassProperties {
         let area = self.area();
         let mass = area * density;
         let inertia = self.inertia(mass);
@@ -144,42 +197,40 @@ impl Polygon {
     /// Get the area of the polygon
     #[inline]
     #[must_use]
-    pub fn area(self) -> f32 {
-        super::utils::polygon_area(&self.vertices)
+    pub fn area(&self) -> f32 {
+        crate::shapes::utils::polygon_area(&self.vertices)
     }
 
     /// Calculate the AABB for the polygon in local space
+    ///
+    /// Returns an invalid AABB for a polygon without vertices.
     #[inline]
     #[must_use]
     pub fn local_aabb(&self) -> Aabb {
-        if let Some(aabb) = self.local_aabb {
-            return aabb;
-        }
-
         let mut aabb = Aabb::invalid();
-        for &v in &self.vertices {
-            aabb.expand_by_point(v);
+        for &vertex in &self.vertices {
+            aabb.expand_by_point(vertex);
         }
-
-        self.local_aabb = Some(aabb);
         aabb
     }
 
     /// Calculate the AABB for the polygon at a given transform
+    ///
+    /// The AABB is computed by rotating the local AABB corners, which is exact
+    /// for axis-aligned polygons and slightly conservative for rotated ones.
     #[inline]
     #[must_use]
-    pub fn aabb(self, transform: Transform) -> Aabb {
+    pub fn aabb(&self, transform: Transform) -> Aabb {
         let local_aabb = self.local_aabb();
-        
-        // Transform the AABB corners and create a new AABB
-        let corners = local_aabb.corners();
-        let mut transformed_aabb = Aabb::invalid();
-        
-        for corner in corners {
-            let transformed = transform.transform_point(corner);
-            transformed_aabb.expand_by_point(transformed);
+
+        if !local_aabb.is_valid() {
+            return local_aabb;
         }
-        
+
+        let mut transformed_aabb = Aabb::invalid();
+        for corner in local_aabb.corners() {
+            transformed_aabb.expand_by_point(transform.transform_point(corner));
+        }
         transformed_aabb
     }
 
@@ -187,73 +238,72 @@ impl Polygon {
     #[inline]
     #[must_use]
     pub fn local_aabb_corners(&self) -> [Vec2; 4] {
-        let aabb = self.local_aabb();
-        aabb.corners()
+        self.local_aabb().corners()
     }
 
-    /// Check if a point is inside the polygon
+    /// Get the corners of the local AABB
     #[inline]
     #[must_use]
-    pub fn contains_point(self, point: Vec2) -> bool {
-        // Use the winding number algorithm
-        let mut winding = 0;
-        let n = self.vertices.len();
+    pub fn corners(&self) -> [Vec2; 4] {
+        self.local_aabb().corners()
+    }
 
-        for i in 0..n {
-            let v1 = self.vertices[i];
-            let v2 = self.vertices[(i + 1) % n];
+    /// Check if a point is inside the polygon (boundary counts as inside)
+    ///
+    /// Uses the half-space test that is valid because polygons are convex and
+    /// their normals point outwards.
+    #[inline]
+    #[must_use]
+    pub fn contains_point(&self, point: Vec2) -> bool {
+        if self.vertices.len() < 3 {
+            return false;
+        }
 
-            // Check if point is exactly on the edge
-            if Self::point_on_edge(point, v1, v2) {
-                return true;
-            }
-
-            // Check if the ray from point to the right crosses the edge
-            if v1.y <= point.y {
-                if v2.y > point.y && Self::is_ray_crossing_edge(point, v1, v2) {
-                    winding += 1;
-                }
-            } else {
-                if v2.y <= point.y && Self::is_ray_crossing_edge(point, v2, v1) {
-                    winding -= 1;
-                }
+        for (index, &vertex) in self.vertices.iter().enumerate() {
+            let normal = self.normals[index];
+            if normal.dot(point - vertex) > 0.0 {
+                return false;
             }
         }
 
-        winding != 0
+        true
     }
 
     /// Find the closest point on the polygon to a given point
+    ///
+    /// Points inside the polygon map to themselves.
     #[inline]
     #[must_use]
-    pub fn closest_point(self, point: Vec2) -> Vec2 {
-        let mut closest = self.vertices[0];
-        let mut min_dist_sq = f32::INFINITY;
-
-        // Check vertices
-        for &v in &self.vertices {
-            let dist_sq = (point - v).length_squared();
-            if dist_sq < min_dist_sq {
-                min_dist_sq = dist_sq;
-                closest = v;
-            }
+    pub fn closest_point(&self, point: Vec2) -> Vec2 {
+        if self.vertices.is_empty() {
+            return Vec2::zero();
         }
 
-        // Check edges
+        if self.contains_point(point) {
+            return point;
+        }
+
+        let mut closest = self.vertices[0];
+        let mut min_dist_sq = (point - closest).length_squared();
+
         let n = self.vertices.len();
         for i in 0..n {
             let v1 = self.vertices[i];
             let v2 = self.vertices[(i + 1) % n];
-            
+
             let edge = v2 - v1;
-            let to_point = point - v1;
-            
-            let t = to_point.dot(edge) / edge.length_squared();
+            let edge_length_sq = edge.length_squared();
+
+            let t = if edge_length_sq > EPSILON * EPSILON {
+                (point - v1).dot(edge) / edge_length_sq
+            } else {
+                0.0
+            };
             let t_clamped = t.clamp(0.0, 1.0);
-            
+
             let projection = v1 + edge * t_clamped;
             let dist_sq = (point - projection).length_squared();
-            
+
             if dist_sq < min_dist_sq {
                 min_dist_sq = dist_sq;
                 closest = projection;
@@ -263,56 +313,27 @@ impl Polygon {
         closest
     }
 
-    /// Compute edge normals from vertices
+    /// Compute outward edge normals from counter-clockwise vertices
+    ///
+    /// For a counter-clockwise polygon the outward normal of the edge
+    /// `v1 -> v2` is the edge rotated by -90 degrees: `(edge.y, -edge.x)`.
     fn compute_normals(vertices: &[Vec2]) -> Vec<Vec2> {
         let n = vertices.len();
         let mut normals = Vec::with_capacity(n);
 
         for i in 0..n {
-            let v1 = vertices[i];
-            let v2 = vertices[(i + 1) % n];
-            
-            let edge = v2 - v1;
-            let normal = Vec2::new(-edge.y, edge.x).normalize();
-            
-            normals.push(normal);
+            let edge = vertices[(i + 1) % n] - vertices[i];
+            let normal = Vec2::new(edge.y, -edge.x);
+            let length = normal.length();
+
+            normals.push(if length > EPSILON {
+                normal / length
+            } else {
+                Vec2::zero()
+            });
         }
 
         normals
-    }
-
-    /// Check if a point is on an edge
-    fn point_on_edge(point: Vec2, v1: Vec2, v2: Vec2) -> bool {
-        let edge = v2 - v1;
-        let to_point = point - v1;
-        
-        // Check if point is colinear with the edge
-        let cross = edge.cross(to_point);
-        if cross.abs() > EPSILON {
-            return false;
-        }
-
-        // Check if point is within the edge bounds
-        let dot = to_point.dot(edge);
-        dot >= 0.0 && dot <= edge.length_squared()
-    }
-
-    /// Check if a ray to the right crosses an edge
-    fn is_ray_crossing_edge(point: Vec2, v1: Vec2, v2: Vec2) -> bool {
-        // Check if the edge crosses the horizontal ray from point to the right
-        let edge = v2 - v1;
-        let to_point = point - v1;
-        
-        // The edge must cross the horizontal line at point.y
-        // and be to the right of point
-        if v1.y > point.y != v2.y > point.y {
-            // Compute x coordinate of intersection
-            let t = (point.y - v1.y) / edge.y;
-            let x = v1.x + edge.x * t;
-            return x > point.x;
-        }
-        
-        false
     }
 
     /// Get the support point in a given direction
@@ -320,15 +341,19 @@ impl Polygon {
     /// The support point is the vertex that is farthest in the given direction.
     #[inline]
     #[must_use]
-    pub fn support(self, direction: Vec2) -> Vec2 {
-        let mut max_dot = f32::NEG_INFINITY;
-        let mut support_vertex = self.vertices[0];
+    pub fn support(&self, direction: Vec2) -> Vec2 {
+        let Some(first) = self.vertices.first() else {
+            return Vec2::zero();
+        };
 
-        for &v in &self.vertices {
-            let dot = v.dot(direction);
+        let mut max_dot = first.dot(direction);
+        let mut support_vertex = *first;
+
+        for &vertex in &self.vertices {
+            let dot = vertex.dot(direction);
             if dot > max_dot {
                 max_dot = dot;
-                support_vertex = v;
+                support_vertex = vertex;
             }
         }
 
@@ -343,12 +368,16 @@ impl Polygon {
             return false;
         }
 
+        if self.normals.len() != self.vertices.len() {
+            return false;
+        }
+
         if !is_convex(&self.vertices) {
             return false;
         }
 
-        for v in &self.vertices {
-            if !v.is_finite() {
+        for vertex in &self.vertices {
+            if !vertex.is_finite() {
                 return false;
             }
         }
@@ -356,7 +385,7 @@ impl Polygon {
         true
     }
 
-    /// Validate the polygon
+    /// Validate the polygon, including coordinate range checks
     #[inline]
     #[must_use]
     pub fn validate(&self) -> bool {
@@ -364,8 +393,8 @@ impl Polygon {
             return false;
         }
 
-        for v in &self.vertices {
-            if v.abs().max_element() >= crate::constants::MAX_FLOAT {
+        for vertex in &self.vertices {
+            if !vertex.validate() {
                 return false;
             }
         }
@@ -378,19 +407,6 @@ impl Polygon {
     #[must_use]
     pub const fn shape_type() -> ShapeType {
         ShapeType::Polygon
-    }
-}
-
-impl Polygon {
-    /// Get the corners of the AABB
-    pub fn corners(&self) -> [Vec2; 4] {
-        let aabb = self.local_aabb();
-        [
-            Vec2::new(aabb.min.x, aabb.min.y),
-            Vec2::new(aabb.max.x, aabb.min.y),
-            Vec2::new(aabb.max.x, aabb.max.y),
-            Vec2::new(aabb.min.x, aabb.max.y),
-        ]
     }
 }
 
@@ -415,7 +431,7 @@ impl fmt::Display for Polygon {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::utils::approx_eq;
+    use crate::math::{utils::approx_eq, utils::approx_eq_eps, Rot2};
 
     #[test]
     fn test_construction() {
@@ -425,7 +441,7 @@ mod tests {
             Vec2::new(1.0, 1.0),
             Vec2::new(-1.0, 1.0),
         ];
-        
+
         let polygon = Polygon::new(vertices);
         assert_eq!(polygon.vertex_count(), 4);
     }
@@ -434,7 +450,7 @@ mod tests {
     fn test_from_rectangle() {
         let polygon = Polygon::from_rectangle(2.0, 4.0);
         assert_eq!(polygon.vertex_count(), 4);
-        
+
         let aabb = polygon.local_aabb();
         assert_eq!(aabb.min, Vec2::new(-1.0, -2.0));
         assert_eq!(aabb.max, Vec2::new(1.0, 2.0));
@@ -444,7 +460,7 @@ mod tests {
     fn test_from_box() {
         let polygon = Polygon::from_box(Vec2::new(1.0, 2.0));
         assert_eq!(polygon.vertex_count(), 4);
-        
+
         let aabb = polygon.local_aabb();
         assert_eq!(aabb.min, Vec2::new(-1.0, -2.0));
         assert_eq!(aabb.max, Vec2::new(1.0, 2.0));
@@ -453,33 +469,58 @@ mod tests {
     #[test]
     fn test_properties() {
         let polygon = Polygon::from_rectangle(2.0, 4.0);
-        
-        let area = polygon.area();
-        assert!(approx_eq(area, 8.0));
-        
+
+        assert!(approx_eq(polygon.area(), 8.0));
+
         let centroid = polygon.centroid();
         assert!(approx_eq(centroid.x, 0.0));
         assert!(approx_eq(centroid.y, 0.0));
     }
 
     #[test]
-    fn test_inertia() {
+    fn test_inertia_matches_analytic_rectangle() {
         let polygon = Polygon::from_rectangle(2.0, 4.0);
         let mass = 8.0; // Area * density (density = 1)
         let inertia = polygon.inertia(mass);
-        
+
         // For a rectangle: I = (m * (w^2 + h^2)) / 12
-        // = (8 * (4 + 16)) / 12 = (8 * 20) / 12 = 160 / 12 = 13.333
         let expected = (mass * (2.0 * 2.0 + 4.0 * 4.0)) / 12.0;
-        assert!(approx_eq(inertia, expected, 1e-5));
+        assert!(
+            approx_eq_eps(inertia, expected, 1e-4),
+            "{inertia} != {expected}"
+        );
+    }
+
+    #[test]
+    fn test_inertia_matches_analytic_triangle() {
+        // Right triangle with legs of length 2, centroid at (2/3, 2/3).
+        let polygon = Polygon::new(vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(2.0, 0.0),
+            Vec2::new(0.0, 2.0),
+        ]);
+        let mass = 2.0 * 2.0 / 2.0; // area = 2 with unit density
+        let inertia = polygon.inertia(mass);
+
+        // Polar moment of a triangle about its centroid:
+        // I = m / 36 * (a^2 + b^2 + c^2) with side lengths a, b, c.
+        // (m / 18 is the moment about the right-angle vertex, twice as large.)
+        let a_sq = 4.0;
+        let b_sq = 4.0;
+        let c_sq = 8.0;
+        let expected = mass / 36.0 * (a_sq + b_sq + c_sq);
+
+        assert!(
+            approx_eq_eps(inertia, expected, 1e-4),
+            "{inertia} != {expected}"
+        );
     }
 
     #[test]
     fn test_mass_properties() {
         let polygon = Polygon::from_rectangle(2.0, 4.0);
-        let density = 1.0;
-        let mp = polygon.mass_properties(density);
-        
+        let mp = polygon.mass_properties(1.0);
+
         assert!(approx_eq(mp.mass, 8.0));
         assert!(approx_eq(mp.center_of_mass.x, 0.0));
         assert!(approx_eq(mp.center_of_mass.y, 0.0));
@@ -488,19 +529,19 @@ mod tests {
     #[test]
     fn test_contains_point() {
         let polygon = Polygon::from_rectangle(2.0, 2.0);
-        
+
         // Point at center
         assert!(polygon.contains_point(Vec2::new(0.0, 0.0)));
-        
+
         // Point at vertex
         assert!(polygon.contains_point(Vec2::new(1.0, 1.0)));
-        
+
         // Point inside
         assert!(polygon.contains_point(Vec2::new(0.5, 0.5)));
-        
+
         // Point on edge
         assert!(polygon.contains_point(Vec2::new(1.0, 0.0)));
-        
+
         // Point outside
         assert!(!polygon.contains_point(Vec2::new(2.0, 0.0)));
     }
@@ -508,50 +549,80 @@ mod tests {
     #[test]
     fn test_closest_point() {
         let polygon = Polygon::from_rectangle(2.0, 2.0);
-        
-        // Point at center
+
+        // Point at center: the point itself
         assert_eq!(
             polygon.closest_point(Vec2::new(0.0, 0.0)),
             Vec2::new(0.0, 0.0)
         );
-        
-        // Point inside
+
+        // Point inside: the point itself
         assert_eq!(
             polygon.closest_point(Vec2::new(0.5, 0.5)),
             Vec2::new(0.5, 0.5)
         );
-        
+
         // Point outside (right)
         let closest = polygon.closest_point(Vec2::new(5.0, 0.0));
         assert!(approx_eq(closest.x, 1.0));
         assert!(approx_eq(closest.y, 0.0));
+
+        // Point outside (diagonal)
+        let closest = polygon.closest_point(Vec2::new(5.0, 5.0));
+        assert!(approx_eq(closest.x, 1.0));
+        assert!(approx_eq(closest.y, 1.0));
     }
 
     #[test]
     fn test_support() {
         let polygon = Polygon::from_rectangle(2.0, 2.0);
-        
-        // Support in positive X direction
-        let support_x = polygon.support(Vec2::new(1.0, 0.0));
-        assert_eq!(support_x, Vec2::new(1.0, -1.0));
-        
-        // Support in negative X direction
-        let support_neg_x = polygon.support(Vec2::new(-1.0, 0.0));
-        assert_eq!(support_neg_x, Vec2::new(-1.0, 1.0));
-        
-        // Support in positive Y direction
-        let support_y = polygon.support(Vec2::new(0.0, 1.0));
-        assert_eq!(support_y, Vec2::new(1.0, 1.0));
+
+        // The rectangle spans [-1, 1] on both axes, so the support along an
+        // axis has a dot product of 1.0 with it. With axis aligned directions
+        // two vertices tie, and any of them is a valid support point.
+        for direction in [
+            Vec2::new(1.0, 0.0),
+            Vec2::new(-1.0, 0.0),
+            Vec2::new(0.0, 1.0),
+            Vec2::new(0.0, -1.0),
+        ] {
+            let support = polygon.support(direction);
+            let best = polygon
+                .vertices()
+                .iter()
+                .map(|vertex| vertex.dot(direction))
+                .fold(f32::NEG_INFINITY, f32::max);
+
+            assert!(approx_eq(support.dot(direction), best));
+        }
+
+        // A diagonal direction has a single maximal vertex
+        let support = polygon.support(Vec2::new(1.0, 1.0));
+        assert_eq!(support, Vec2::new(1.0, 1.0));
     }
 
     #[test]
     fn test_aabb() {
         let polygon = Polygon::from_rectangle(2.0, 4.0);
         let transform = Transform::new(Vec2::new(10.0, 20.0), Rot2::identity());
-        
+
         let aabb = polygon.aabb(transform);
         assert_eq!(aabb.min, Vec2::new(9.0, 18.0));
         assert_eq!(aabb.max, Vec2::new(11.0, 22.0));
+    }
+
+    #[test]
+    fn test_aabb_rotated() {
+        // A 2x2 square rotated by 45 degrees spans 2 * sqrt(2).
+        let polygon = Polygon::from_rectangle(2.0, 2.0);
+        let transform = Transform::from_rotation(Rot2::new(crate::constants::PI_OVER_FOUR));
+
+        let aabb = polygon.aabb(transform);
+        let expected = 2.0 * (2.0_f32).sqrt();
+        assert!(approx_eq_eps(aabb.width(), expected, 1e-5));
+        assert!(approx_eq_eps(aabb.height(), expected, 1e-5));
+        assert!(approx_eq_eps(aabb.center().x, 0.0, 1e-6));
+        assert!(approx_eq_eps(aabb.center().y, 0.0, 1e-6));
     }
 
     #[test]
@@ -560,16 +631,59 @@ mod tests {
         assert!(polygon1.is_valid());
         assert!(polygon1.validate());
 
-        // Test with NaN vertex
-        let vertices_with_nan = vec![
+        // Out of range coordinates fail full validation
+        let huge = Polygon::try_new(vec![
             Vec2::new(-1.0, -1.0),
-            Vec2::new(f32::NAN, -1.0),
-            Vec2::new(1.0, 1.0),
-        ];
-        // This would panic in debug mode due to the assertion
-        // In release mode, we can't test this easily
+            Vec2::new(1.0, -1.0),
+            Vec2::new(1.0, crate::constants::MAX_FLOAT * 10.0),
+        ]);
+        assert!(huge.is_err());
+    }
 
-        // Test with too few vertices - would panic
+    #[test]
+    fn test_try_new_rejects_invalid_geometry() {
+        // Too few vertices
+        assert_eq!(
+            Polygon::try_new(vec![Vec2::zero(), Vec2::new(1.0, 0.0)]),
+            Err(ShapeError::TooFewVertices(2))
+        );
+
+        // Non-finite vertex
+        assert!(matches!(
+            Polygon::try_new(vec![
+                Vec2::new(-1.0, -1.0),
+                Vec2::new(f32::NAN, -1.0),
+                Vec2::new(1.0, 1.0),
+            ]),
+            Err(ShapeError::NonFiniteVertex { index: 1 })
+        ));
+
+        // Degenerate: all points collinear
+        assert_eq!(
+            Polygon::try_new(vec![
+                Vec2::new(0.0, 0.0),
+                Vec2::new(1.0, 1.0),
+                Vec2::new(2.0, 2.0),
+            ]),
+            Err(ShapeError::Degenerate)
+        );
+
+        // Concave (a chevron)
+        assert_eq!(
+            Polygon::try_new(vec![
+                Vec2::new(-1.0, -1.0),
+                Vec2::new(0.0, 0.0),
+                Vec2::new(1.0, -1.0),
+                Vec2::new(0.0, 1.0),
+            ]),
+            Err(ShapeError::Concave)
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_new_panics_on_invalid_geometry() {
+        let _ = Polygon::new(vec![Vec2::zero(), Vec2::new(1.0, 0.0)]);
     }
 
     #[test]
@@ -578,29 +692,51 @@ mod tests {
     }
 
     #[test]
-    fn test_normals() {
+    fn test_normals_are_outward() {
         let polygon = Polygon::from_rectangle(2.0, 2.0);
         let normals = polygon.normals();
-        
+
         assert_eq!(normals.len(), 4);
-        
-        // Check that normals are perpendicular to edges
-        for i in 0..4 {
-            let v1 = polygon.vertices[i];
-            let v2 = polygon.vertices[(i + 1) % 4];
+
+        let vertex_count = polygon.vertices.len();
+        for (i, (&v1, &normal)) in polygon.vertices.iter().zip(normals).take(4).enumerate() {
+            let v2 = polygon.vertices[(i + 1) % vertex_count];
             let edge = v2 - v1;
-            let normal = normals[i];
-            
-            // Normal should be perpendicular to edge
-            assert!(approx_eq(edge.dot(normal), 0.0, 1e-5));
-            
-            // Normal should be approximately unit length
-            assert!(approx_eq(normal.length(), 1.0, 1e-5));
+
+            // Normal is perpendicular to the edge and unit length
+            assert!(approx_eq_eps(edge.dot(normal), 0.0, 1e-5));
+            assert!(approx_eq_eps(normal.length(), 1.0, 1e-5));
+
+            // The normal points away from the polygon centre
+            let edge_midpoint = (v1 + v2) / 2.0;
+            assert!(
+                normal.dot(edge_midpoint - polygon.centroid()) > 0.0,
+                "normal {i} points inwards"
+            );
+
+            // Moving a point along the normal leaves the polygon
+            assert!(!polygon.contains_point(edge_midpoint + normal * 0.01));
+            assert!(polygon.contains_point(edge_midpoint - normal * 0.01));
         }
     }
 
     #[test]
-    fn test_winding() {
+    fn test_normals_of_triangle() {
+        let polygon = Polygon::new(vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(1.0, 0.0),
+            Vec2::new(0.0, 1.0),
+        ]);
+
+        // Bottom edge from (0,0) to (1,0): outward normal is (0,-1)
+        assert_eq!(polygon.normals()[0], Vec2::new(0.0, -1.0));
+        // Hypotenuse from (1,0) to (0,1): outward normal is (1,1)/sqrt(2)
+        let expected = Vec2::new(1.0, 1.0).normalize();
+        assert_eq!(polygon.normals()[1], expected);
+    }
+
+    #[test]
+    fn test_winding_is_normalised() {
         // Create vertices in clockwise order
         let vertices_cw = vec![
             Vec2::new(-1.0, -1.0),
@@ -608,13 +744,12 @@ mod tests {
             Vec2::new(1.0, 1.0),
             Vec2::new(1.0, -1.0),
         ];
-        
+
         let polygon = Polygon::new(vertices_cw);
-        
-        // The constructor should have normalized the winding
-        // Check by verifying the area is positive
-        let area = polygon.area();
-        assert!(area > 0.0);
+
+        // The constructor normalises the winding to counter-clockwise
+        assert!(crate::shapes::utils::polygon_signed_area(&polygon.vertices) > 0.0);
+        assert!(polygon.area() > 0.0);
     }
 
     #[test]

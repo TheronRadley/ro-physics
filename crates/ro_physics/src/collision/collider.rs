@@ -5,14 +5,17 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use super::Filter;
 use crate::bodies::BodyHandle;
 use crate::math::Transform;
 use crate::shapes::Shape;
-use super::Filter;
 
 /// A handle to a collider
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ColliderHandle {
     /// Unique identifier for the collider
     pub id: u64,
@@ -67,7 +70,11 @@ impl fmt::Display for ColliderHandle {
         if self.is_null() {
             write!(f, "ColliderHandle(null)")
         } else {
-            write!(f, "ColliderHandle(id: {}, gen: {})", self.id, self.generation)
+            write!(
+                f,
+                "ColliderHandle(id: {}, gen: {})",
+                self.id, self.generation
+            )
         }
     }
 }
@@ -113,7 +120,10 @@ impl Default for ColliderHandleGenerator {
 ///
 /// Colliders define the shape and collision properties of a body.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Collider {
     /// Handle to this collider
     handle: ColliderHandle,
@@ -139,11 +149,7 @@ impl Collider {
     /// Create a new collider
     #[inline]
     #[must_use]
-    pub fn new(
-        handle: ColliderHandle,
-        body_handle: BodyHandle,
-        shape: Shape,
-    ) -> Self {
+    pub fn new(handle: ColliderHandle, body_handle: BodyHandle, shape: Shape) -> Self {
         Self {
             handle,
             body_handle,
@@ -191,6 +197,19 @@ impl Collider {
         &self.shape
     }
 
+    /// A characteristic length of the collider, used by continuous collision
+    /// detection to decide whether a body can tunnel through it in one step
+    ///
+    /// This is the half diagonal of the collider's local AABB, i.e. roughly the
+    /// radius of a disc that encloses the shape.
+    #[inline]
+    #[must_use]
+    pub fn characteristic_size(&self) -> f32 {
+        let aabb = self.shape.local_aabb();
+        let half = aabb.half_extents();
+        half.length().max(crate::constants::EPSILON)
+    }
+
     /// Get the shape mutably
     #[inline]
     #[must_use]
@@ -225,8 +244,16 @@ impl Collider {
     }
 
     /// Set the friction
+    ///
+    /// Values outside `[0, 1]` are clamped and non-finite ones are ignored:
+    /// `f32::clamp` passes NaN straight through, and a NaN friction would turn
+    /// every tangential impulse into NaN.
     #[inline]
     pub fn set_friction(&mut self, friction: f32) {
+        if !friction.is_finite() {
+            return;
+        }
+
         self.friction = friction.clamp(0.0, 1.0);
     }
 
@@ -238,8 +265,15 @@ impl Collider {
     }
 
     /// Set the restitution
+    ///
+    /// Values outside `[0, 1]` are clamped and non-finite ones are ignored
+    /// (see [`Collider::set_friction`]).
     #[inline]
     pub fn set_restitution(&mut self, restitution: f32) {
+        if !restitution.is_finite() {
+            return;
+        }
+
         self.restitution = restitution.clamp(0.0, 1.0);
     }
 
@@ -354,6 +388,7 @@ impl fmt::Display for Collider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math::{Rot2, Transform, Vec2};
     use crate::shapes::Circle;
 
     #[test]
@@ -498,10 +533,20 @@ mod tests {
         assert!(collider.is_valid());
         assert!(collider.validate());
 
-        let mut invalid_collider = Collider::new(handle, body_handle, shape);
+        // The setters refuse non-finite input, so a bad call leaves the
+        // collider valid and unchanged
+        let mut invalid_collider =
+            Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
         invalid_collider.set_friction(f32::NAN);
-        assert!(!invalid_collider.is_valid());
-        assert!(!invalid_collider.validate());
+        assert!(invalid_collider.friction.is_finite());
+        assert!(invalid_collider.is_valid());
+        assert!(invalid_collider.validate());
+
+        // `is_valid` still reports state that was corrupted some other way
+        let mut corrupted = Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
+        corrupted.friction = f32::NAN;
+        assert!(!corrupted.is_valid());
+        assert!(!corrupted.validate());
     }
 
     #[test]
@@ -523,9 +568,33 @@ mod tests {
         assert!(collider_str.contains("Circle"));
     }
 
+    #[test]
+    fn test_material_setters_reject_non_finite_values() {
+        let mut collider = Collider::new(
+            ColliderHandle::new(1, 0),
+            BodyHandle::new(1, 0),
+            Shape::Circle(Circle::new(1.0)),
+        );
+        collider.set_friction(0.4);
+        collider.set_restitution(0.3);
+
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            collider.set_friction(bad);
+            assert_eq!(collider.friction(), 0.4);
+            collider.set_restitution(bad);
+            assert_eq!(collider.restitution(), 0.3);
+        }
+
+        // Out of range values are clamped, not stored raw
+        collider.set_friction(5.0);
+        assert_eq!(collider.friction(), 1.0);
+        collider.set_restitution(-5.0);
+        assert_eq!(collider.restitution(), 0.0);
+    }
+
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
-        (a - b).abs() <= epsilon
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
     }
 }

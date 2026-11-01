@@ -2,8 +2,6 @@
 //!
 //! This module provides debugging and visualization tools for the physics simulation.
 
-use crate::bodies::BodyHandle;
-use crate::collision::{ColliderHandle, ContactManifold};
 use crate::geometry::Aabb;
 use crate::math::{Transform, Vec2};
 
@@ -96,7 +94,10 @@ impl Default for DebugFlags {
 
 /// Debug statistics for the physics simulation
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct DebugStats {
     /// Number of bodies
     pub body_count: usize,
@@ -181,7 +182,10 @@ pub trait DebugRenderer: Send + Sync {
 
 /// Debug color (RGBA)
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct DebugColor {
     /// Red component (0-1)
     pub r: f32,
@@ -377,7 +381,7 @@ mod tests {
     fn test_color_lerp() {
         let a = DebugColor::red();
         let b = DebugColor::blue();
-        
+
         let mid = lerp_color(a, b, 0.5);
         assert!(approx_eq(mid.r, 0.5));
         assert!(approx_eq(mid.g, 0.0));

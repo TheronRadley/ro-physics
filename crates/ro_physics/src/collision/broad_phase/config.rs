@@ -4,7 +4,10 @@
 
 /// Configuration for the broad-phase collision detection.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct BroadPhaseConfig {
     /// Initial capacity of the AABB tree
     pub aabb_tree_capacity: usize,
@@ -95,7 +98,7 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
-        (a - b).abs() <= epsilon
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
     }
 }

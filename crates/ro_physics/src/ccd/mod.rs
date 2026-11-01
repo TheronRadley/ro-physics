@@ -4,13 +4,14 @@
 //! to prevent tunneling in fast-moving objects.
 
 mod config;
-mod toi;
 mod swept_collision;
+#[cfg(test)]
 mod tests;
+mod toi;
 
 pub use config::CcdConfig;
+pub use swept_collision::{CcdResult, SweptCollisionDetector};
 pub use toi::{TimeOfImpact, ToiResult};
-pub use swept_collision::SweptCollisionDetector;
 
 /// CCD utilities
 pub mod utils {
@@ -34,7 +35,7 @@ pub mod utils {
     #[inline]
     #[must_use]
     pub fn is_valid_toi(toi: f32) -> bool {
-        toi >= 0.0 && toi <= 1.0
+        (0.0..=1.0).contains(&toi)
     }
 
     /// Clamp time of impact to valid range

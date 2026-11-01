@@ -3,12 +3,11 @@
 //! This module provides swept collision detection for preventing tunneling
 //! in fast-moving objects.
 
+use super::{CcdConfig, TimeOfImpact, ToiResult};
 use crate::bodies::Body;
 use crate::collision::Collider;
-use crate::constants::EPSILON;
 use crate::math::{Transform, Vec2};
 use crate::shapes::Shape;
-use super::{TimeOfImpact, ToiResult, CcdConfig};
 
 /// Swept collision detector.
 ///
@@ -26,13 +25,6 @@ impl SweptCollisionDetector {
     #[must_use]
     pub fn new(config: CcdConfig) -> Self {
         Self { config }
-    }
-
-    /// Create a new swept collision detector with default configuration
-    #[inline]
-    #[must_use]
-    pub fn default() -> Self {
-        Self::new(CcdConfig::default())
     }
 
     /// Get the configuration
@@ -60,8 +52,20 @@ impl SweptCollisionDetector {
             return None;
         }
 
-        let shape_a = collider_a.shape()?;
-        let shape_b = collider_b.shape()?;
+        // A sweep is only meaningful over a positive, finite timestep.
+        if !(dt > 0.0 && dt.is_finite()) {
+            return None;
+        }
+
+        // CCD exists to stop fast movers from passing through each other; when
+        // neither body can move there is nothing to sweep, and any existing
+        // overlap is the narrow phase's job.
+        if !body_a.is_dynamic() && !body_b.is_dynamic() {
+            return None;
+        }
+
+        let shape_a = collider_a.shape();
+        let shape_b = collider_b.shape();
 
         let transform_a = body_a.transform();
         let transform_b = body_b.transform();
@@ -72,9 +76,14 @@ impl SweptCollisionDetector {
         let angular_velocity_b = body_b.angular_velocity();
 
         let toi = self.calculate_toi(
-            &shape_a, transform_a, velocity_a, angular_velocity_a,
-            &shape_b, transform_b, velocity_b, angular_velocity_b,
-            dt,
+            shape_a,
+            transform_a,
+            velocity_a,
+            angular_velocity_a,
+            shape_b,
+            transform_b,
+            velocity_b,
+            angular_velocity_b,
         );
 
         if toi.is_colliding() && toi.toi < 1.0 {
@@ -96,53 +105,44 @@ impl SweptCollisionDetector {
         transform_b: Transform,
         velocity_b: Vec2,
         angular_velocity_b: f32,
-        dt: f32,
     ) -> ToiResult {
-        let toi = TimeOfImpact;
-
         match (shape_a, shape_b) {
-            (Shape::Circle(circle_a), Shape::Circle(circle_b)) => {
-                toi.circle_circle(
-                    circle_a,
-                    transform_a.position,
-                    velocity_a,
-                    circle_b,
-                    transform_b.position,
-                    velocity_b,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
-            (Shape::Circle(circle_a), Shape::Polygon(polygon_b)) => {
-                toi.circle_polygon(
-                    circle_a,
-                    transform_a.position,
-                    velocity_a,
-                    polygon_b,
-                    transform_b.position,
-                    velocity_b,
-                    transform_b.rotation.angle(),
-                    angular_velocity_b,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
-            (Shape::Polygon(polygon_a), Shape::Circle(circle_b)) => {
-                toi.circle_polygon(
-                    circle_b,
-                    transform_b.position,
-                    velocity_b,
-                    polygon_a,
-                    transform_a.position,
-                    velocity_a,
-                    transform_a.rotation.angle(),
-                    angular_velocity_a,
-                    self.config.max_toi_iterations,
-                    self.config.toi_tolerance,
-                )
-            }
+            (Shape::Circle(circle_a), Shape::Circle(circle_b)) => TimeOfImpact::circle_circle(
+                circle_a,
+                transform_a.position,
+                velocity_a,
+                circle_b,
+                transform_b.position,
+                velocity_b,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
+            (Shape::Circle(circle_a), Shape::Polygon(polygon_b)) => TimeOfImpact::circle_polygon(
+                circle_a,
+                transform_a.position,
+                velocity_a,
+                polygon_b,
+                transform_b.position,
+                velocity_b,
+                transform_b.rotation.angle(),
+                angular_velocity_b,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
+            (Shape::Polygon(polygon_a), Shape::Circle(circle_b)) => TimeOfImpact::circle_polygon(
+                circle_b,
+                transform_b.position,
+                velocity_b,
+                polygon_a,
+                transform_a.position,
+                velocity_a,
+                transform_a.rotation.angle(),
+                angular_velocity_a,
+                self.config.max_toi_iterations,
+                self.config.toi_tolerance,
+            ),
             (Shape::Polygon(polygon_a), Shape::Polygon(polygon_b)) => {
-                toi.polygon_polygon(
+                TimeOfImpact::polygon_polygon(
                     polygon_a,
                     transform_a.position,
                     velocity_a,
@@ -157,7 +157,6 @@ impl SweptCollisionDetector {
                     self.config.toi_tolerance,
                 )
             }
-            _ => ToiResult::new(1.0, false, 0),
         }
     }
 
@@ -179,29 +178,35 @@ impl SweptCollisionDetector {
             return false;
         }
 
-        // Calculate distance moved by each body
-        let distance_a = body_a.linear_velocity().length() * dt;
-        let distance_b = body_b.linear_velocity().length() * dt;
+        if dt <= 0.0 || !dt.is_finite() || (!body_a.is_dynamic() && !body_b.is_dynamic()) {
+            return false;
+        }
 
-        // Calculate characteristic size of colliders
-        let size_a = collider_a.characteristic_size();
-        let size_b = collider_b.characteristic_size();
+        // What matters is how far the pair moves relative to each other: a
+        // collision is missed when that displacement is larger than the
+        // smaller of the two shapes, because the pair can then step straight
+        // through its own contact configuration.
+        let relative_distance = (body_b.linear_velocity() - body_a.linear_velocity()).length() * dt;
+        let smallest_size = collider_a
+            .characteristic_size()
+            .min(collider_b.characteristic_size());
 
-        // If either body moves more than the combined size in one step, tunneling is possible
-        let combined_size = size_a + size_b;
-        distance_a > combined_size || distance_b > combined_size
+        relative_distance > smallest_size
     }
 }
 
 impl Default for SweptCollisionDetector {
     fn default() -> Self {
-        Self::default()
+        Self::new(CcdConfig::default())
     }
 }
 
 /// CCD result containing TOI information.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct CcdResult {
     /// Whether CCD was performed
     pub ccd_performed: bool,
@@ -255,8 +260,7 @@ mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
     use crate::collision::ColliderHandle;
-    use crate::shapes::{Circle, Polygon};
-    use crate::math::Rot2;
+    use crate::shapes::Circle;
 
     #[test]
     fn test_construction() {
@@ -272,7 +276,7 @@ mod tests {
         let detector = SweptCollisionDetector::new(
             CcdConfig::new()
                 .with_enabled(true)
-                .with_max_toi_iterations(20)
+                .with_max_toi_iterations(20),
         );
 
         let handle_a = BodyHandle::new(1, 0);
@@ -291,7 +295,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_some());
         let toi_result = result.unwrap();
@@ -320,7 +325,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_none());
     }
@@ -344,7 +350,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let will_tunnel = detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let will_tunnel =
+            detector.will_tunnel(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(will_tunnel);
     }
@@ -363,9 +370,7 @@ mod tests {
 
     #[test]
     fn test_ccd_disabled() {
-        let detector = SweptCollisionDetector::new(
-            CcdConfig::new().with_enabled(false)
-        );
+        let detector = SweptCollisionDetector::new(CcdConfig::new().with_enabled(false));
 
         let handle_a = BodyHandle::new(1, 0);
         let body_a = Body::new_dynamic(handle_a);
@@ -379,7 +384,8 @@ mod tests {
         let collider_a = Collider::new(ColliderHandle::new(1, 0), handle_a, shape_a);
         let collider_b = Collider::new(ColliderHandle::new(2, 0), handle_b, shape_b);
 
-        let result = detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
+        let result =
+            detector.check_swept_collision(&body_a, &collider_a, &body_b, &collider_b, 1.0 / 60.0);
 
         assert!(result.is_none());
     }

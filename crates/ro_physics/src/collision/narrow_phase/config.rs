@@ -4,7 +4,10 @@
 
 /// Configuration for narrow-phase collision detection.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct NarrowPhaseConfig {
     /// Maximum number of contact points to generate per manifold
     pub max_contact_points: usize,
@@ -71,7 +74,6 @@ impl Default for NarrowPhaseConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::EPSILON;
 
     #[test]
     fn test_construction() {
@@ -104,7 +106,7 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = EPSILON) -> bool {
-        (a - b).abs() <= epsilon
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= crate::constants::EPSILON
     }
 }

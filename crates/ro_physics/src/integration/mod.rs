@@ -3,7 +3,7 @@
 //! This module provides various integration methods for rigid body simulation.
 
 use crate::bodies::Body;
-use crate::math::{Transform, Vec2};
+use crate::math::Vec2;
 
 /// Integration method trait
 pub trait Integrator: Send + Sync {
@@ -38,9 +38,10 @@ impl Integrator for SemiImplicitEuler {
         let new_linear_velocity = body.linear_velocity() + linear_acceleration * dt;
         let new_angular_velocity = body.angular_velocity() + angular_acceleration * dt;
 
-        // Apply damping
-        let linear_velocity = new_linear_velocity * (1.0 - body.linear_damping()).max(0.0);
-        let angular_velocity = new_angular_velocity * (1.0 - body.angular_damping()).max(0.0);
+        // Time-correct damping: v /= (1 + damping * dt). Unlike a plain
+        // `v * (1 - damping)` this is stable for any damping and timestep.
+        let linear_velocity = new_linear_velocity / (1.0 + body.linear_damping().max(0.0) * dt);
+        let angular_velocity = new_angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
 
         // Update position
         let new_position = body.position() + linear_velocity * dt;
@@ -84,9 +85,9 @@ impl Integrator for SymplecticEuler {
         let linear_velocity = body.linear_velocity() + total_force * inv_mass * dt;
         let angular_velocity = body.angular_velocity() + body.torque() * inv_inertia * dt;
 
-        // Apply damping
-        let linear_velocity = linear_velocity * (1.0 - body.linear_damping()).max(0.0);
-        let angular_velocity = angular_velocity * (1.0 - body.angular_damping()).max(0.0);
+        // Time-correct damping: v /= (1 + damping * dt)
+        let linear_velocity = linear_velocity / (1.0 + body.linear_damping().max(0.0) * dt);
+        let angular_velocity = angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
 
         // Update body state
         body.set_position(new_position);
@@ -111,10 +112,8 @@ pub mod utils {
         gravity: Vec2,
         dt: f32,
     ) {
-        for body in bodies {
-            if let Some(body) = body {
-                integrator.integrate(body, gravity, dt);
-            }
+        for body in bodies.iter_mut().flatten() {
+            integrator.integrate(body, gravity, dt);
         }
     }
 }
@@ -125,12 +124,12 @@ pub use utils::*;
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
-    use crate::math::utils::approx_eq;
+    use crate::math::utils::approx_eq_eps;
 
     #[test]
     fn test_semi_implicit_euler() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -145,16 +144,16 @@ mod tests {
 
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 0 + 1*0.1 = 0.1
-        assert!(approx_eq(body.linear_velocity().x, 0.1, 1e-5));
-        
+        assert!(approx_eq_eps(body.linear_velocity().x, 0.1, 1e-5));
+
         // x = x0 + v*dt = 0 + 0.1*0.1 = 0.01
-        assert!(approx_eq(body.position().x, 0.01, 1e-5));
+        assert!(approx_eq_eps(body.position().x, 0.01, 1e-5));
     }
 
     #[test]
     fn test_symplectic_euler() {
         let integrator = SymplecticEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -168,17 +167,17 @@ mod tests {
         integrator.integrate(&mut body, gravity, dt);
 
         // x = x0 + v*dt = 0 + 1*0.1 = 0.1
-        assert!(approx_eq(body.position().x, 0.1, 1e-5));
-        
+        assert!(approx_eq_eps(body.position().x, 0.1, 1e-5));
+
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 1 + 1*0.1 = 1.1
-        assert!(approx_eq(body.linear_velocity().x, 1.1, 1e-5));
+        assert!(approx_eq_eps(body.linear_velocity().x, 1.1, 1e-5));
     }
 
     #[test]
     fn test_integrate_bodies() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle1 = BodyHandle::new(1, 0);
         let mut body1 = Body::new_dynamic(handle1);
         body1.set_mass_properties(10.0, 5.0);
@@ -199,13 +198,20 @@ mod tests {
 
         assert_eq!(bodies.len(), 2);
         assert!(bodies[0].as_ref().unwrap().linear_velocity().x > 0.0);
-        assert!(bodies[1].as_ref().unwrap().linear_velocity().y > 0.0);
+
+        // Body 2 only pushes with 5 N on a mass of 5 kg, i.e. 1 m/s^2, which
+        // gravity (9.81 m/s^2) easily wins, so it still ends up moving down.
+        assert!(approx_eq_eps(
+            bodies[1].as_ref().unwrap().linear_velocity().y,
+            (1.0 - 9.81) * 0.1,
+            1e-5
+        ));
     }
 
     #[test]
     fn test_damping() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
         body.set_mass_properties(10.0, 5.0);
@@ -217,14 +223,14 @@ mod tests {
 
         integrator.integrate(&mut body, gravity, dt);
 
-        // v = v0 * (1 - damping) = 10 * 0.5 = 5
-        assert!(approx_eq(body.linear_velocity().x, 5.0, 1e-5));
+        // v = v0 / (1 + damping * dt) = 10 / 1.05
+        assert!(approx_eq_eps(body.linear_velocity().x, 10.0 / 1.05, 1e-5));
     }
 
     #[test]
     fn test_static_body() {
         let integrator = SemiImplicitEuler;
-        
+
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_static(handle);
         body.set_linear_velocity(Vec2::new(10.0, 0.0));

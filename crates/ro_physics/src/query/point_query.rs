@@ -10,7 +10,10 @@ use crate::math::Vec2;
 
 /// Point query structure
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct PointQuery {
     /// The point to query
     pub point: Vec2,
@@ -53,7 +56,10 @@ impl fmt::Display for PointQuery {
 
 /// Result of a point query
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct PointQueryResult {
     /// Handle to the body that contains the point
     pub body_handle: BodyHandle,
@@ -143,12 +149,8 @@ mod tests {
 
     #[test]
     fn test_point_query_result() {
-        let result = PointQueryResult::new(
-            BodyHandle::new(1, 0),
-            ColliderHandle::new(1, 0),
-            true,
-            0.0,
-        );
+        let result =
+            PointQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0), true, 0.0);
 
         assert_eq!(result.body_handle, BodyHandle::new(1, 0));
         assert_eq!(result.collider_handle, ColliderHandle::new(1, 0));
@@ -166,12 +168,8 @@ mod tests {
 
     #[test]
     fn test_point_query_result_display() {
-        let result = PointQueryResult::new(
-            BodyHandle::new(1, 0),
-            ColliderHandle::new(1, 0),
-            true,
-            0.5,
-        );
+        let result =
+            PointQueryResult::new(BodyHandle::new(1, 0), ColliderHandle::new(1, 0), true, 0.5);
 
         let result_str = format!("{}", result);
         assert!(result_str.contains("PointQueryResult"));

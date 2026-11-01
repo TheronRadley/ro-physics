@@ -4,18 +4,71 @@
 //! and physics simulation.
 
 mod circle;
+mod mass_properties;
 mod polygon;
 mod shape;
-mod mass_properties;
 
 pub use circle::Circle;
+pub use mass_properties::MassProperties;
 pub use polygon::Polygon;
 pub use shape::{Shape, ShapeType};
-pub use mass_properties::MassProperties;
+
+use std::fmt;
+
+/// Reasons why a piece of geometry was rejected.
+///
+/// Returned by [`Polygon::try_new`] and [`Circle::try_new`] instead of
+/// panicking, so that invalid scenes can be reported rather than aborting the
+/// process.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ShapeError {
+    /// The shape has fewer vertices than the minimum (3 for polygons)
+    TooFewVertices(usize),
+    /// A vertex is NaN or infinite
+    NonFiniteVertex {
+        /// Index of the offending vertex
+        index: usize,
+    },
+    /// A vertex lies outside the supported coordinate range
+    OutOfRangeVertex {
+        /// Index of the offending vertex
+        index: usize,
+    },
+    /// The polygon has (nearly) zero area
+    Degenerate,
+    /// The polygon is not convex
+    Concave,
+    /// The radius is negative, non-finite or out of range
+    InvalidRadius(f32),
+}
+
+impl fmt::Display for ShapeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TooFewVertices(count) => {
+                write!(f, "polygon needs at least 3 vertices, got {count}")
+            }
+            Self::NonFiniteVertex { index } => {
+                write!(f, "vertex {index} is not finite")
+            }
+            Self::OutOfRangeVertex { index } => {
+                write!(
+                    f,
+                    "vertex {index} is outside the supported coordinate range"
+                )
+            }
+            Self::Degenerate => write!(f, "polygon is degenerate (zero area)"),
+            Self::Concave => write!(f, "polygon is not convex"),
+            Self::InvalidRadius(radius) => write!(f, "invalid circle radius: {radius}"),
+        }
+    }
+}
+
+impl std::error::Error for ShapeError {}
 
 /// Shape utilities
 pub mod utils {
-    use super::*;
+    use crate::constants::EPSILON;
     use crate::math::Vec2;
 
     /// Calculate the moment of inertia for a circle
@@ -25,36 +78,59 @@ pub mod utils {
         0.5 * mass * radius * radius
     }
 
-    /// Calculate the moment of inertia for a rectangle
+    /// Calculate the moment of inertia for a rectangle about its centre
     #[inline]
     #[must_use]
     pub fn rectangle_inertia(mass: f32, width: f32, height: f32) -> f32 {
         (mass * (width * width + height * height)) / 12.0
     }
 
-    /// Calculate the moment of inertia for a polygon
+    /// Calculate the polar moment of inertia of a polygon about a reference
+    /// point (usually the centroid)
     ///
-    /// Uses the parallel axis theorem with vertices relative to centroid.
+    /// Uses the standard decomposition of the polygon into triangles fanned out
+    /// from `centroid`:
+    ///
+    /// ```text
+    /// I = m * sum(|D_i| * (v_i . v_i + v_i . v_{i+1} + v_{i+1} . v_{i+1}))
+    ///         / (12 * area)
+    /// ```
+    ///
+    /// where `D_i = cross(v_i, v_{i+1})` and the vertices are relative to
+    /// `centroid`. Returns 0 for degenerate polygons.
     #[inline]
     #[must_use]
     pub fn polygon_inertia(mass: f32, vertices: &[Vec2], centroid: Vec2) -> f32 {
-        let mut inertia = 0.0;
         let n = vertices.len();
+        if n < 3 || !(mass > 0.0 && mass.is_finite()) {
+            return 0.0;
+        }
+
+        let mut double_area = 0.0;
+        let mut numerator = 0.0;
 
         for i in 0..n {
             let v1 = vertices[i] - centroid;
             let v2 = vertices[(i + 1) % n] - centroid;
-            
+
             let cross = v1.cross(v2);
             let dot = v1.dot(v1) + v1.dot(v2) + v2.dot(v2);
-            
-            inertia += cross * dot;
+
+            double_area += cross;
+            numerator += cross * dot;
         }
 
-        (mass * inertia.abs()) / 48.0
+        let area = 0.5 * double_area.abs();
+        if area <= EPSILON {
+            return 0.0;
+        }
+
+        (mass * numerator.abs()) / (12.0 * area)
     }
 
-    /// Calculate the centroid of a polygon
+    /// Calculate the centroid (area centre) of a polygon
+    ///
+    /// Falls back to the average of the vertices for degenerate polygons.
     #[inline]
     #[must_use]
     pub fn polygon_centroid(vertices: &[Vec2]) -> Vec2 {
@@ -69,14 +145,14 @@ pub mod utils {
         for i in 0..n {
             let v1 = vertices[i];
             let v2 = vertices[(i + 1) % n];
-            
+
             let cross = v1.cross(v2);
             area += cross;
             centroid += (v1 + v2) * cross;
         }
 
         area /= 2.0;
-        if area.abs() < crate::constants::EPSILON {
+        if area.abs() < EPSILON {
             // Degenerate polygon, return average of vertices
             let mut sum = Vec2::zero();
             for v in vertices {
@@ -88,49 +164,64 @@ pub mod utils {
         }
     }
 
-    /// Calculate the area of a polygon
+    /// Calculate the signed area of a polygon
+    ///
+    /// Positive for counter-clockwise winding, negative for clockwise.
     #[inline]
     #[must_use]
-    pub fn polygon_area(vertices: &[Vec2]) -> f32 {
+    pub fn polygon_signed_area(vertices: &[Vec2]) -> f32 {
         let n = vertices.len();
         if n < 3 {
             return 0.0;
         }
 
-        let mut area = 0.0;
+        let mut double_area = 0.0;
         for i in 0..n {
-            let v1 = vertices[i];
-            let v2 = vertices[(i + 1) % n];
-            area += v1.cross(v2);
+            double_area += vertices[i].cross(vertices[(i + 1) % n]);
         }
 
-        area.abs() / 2.0
+        double_area / 2.0
+    }
+
+    /// Calculate the (unsigned) area of a polygon
+    #[inline]
+    #[must_use]
+    pub fn polygon_area(vertices: &[Vec2]) -> f32 {
+        polygon_signed_area(vertices).abs()
     }
 
     /// Check if a polygon is convex
+    ///
+    /// Every polygon with fewer than four vertices is convex as long as it has
+    /// a non-zero area.
     #[inline]
     #[must_use]
     pub fn is_convex(vertices: &[Vec2]) -> bool {
-        if vertices.len() < 3 {
-            return true;
+        let n = vertices.len();
+        if n < 3 {
+            return false;
+        }
+        if n == 3 {
+            return polygon_area(vertices) > EPSILON;
         }
 
-        let n = vertices.len();
-        let mut prev_cross = 0.0;
+        let mut sign = 0.0_f32;
 
         for i in 0..n {
             let v1 = vertices[i];
             let v2 = vertices[(i + 1) % n];
             let v3 = vertices[(i + 2) % n];
-            
-            let edge1 = v2 - v1;
-            let edge2 = v3 - v2;
-            
-            let cross = edge1.cross(edge2);
-            
-            if i == 0 {
-                prev_cross = cross;
-            } else if cross * prev_cross < -crate::constants::EPSILON {
+
+            let cross = (v2 - v1).cross(v3 - v2);
+
+            if cross.abs() <= EPSILON {
+                // Collinear (or degenerate) edges do not break convexity
+                continue;
+            }
+
+            if sign == 0.0 {
+                sign = cross;
+            } else if cross * sign < 0.0 {
                 return false;
             }
         }
@@ -139,68 +230,68 @@ pub mod utils {
     }
 
     /// Normalize polygon winding to counter-clockwise
+    ///
+    /// Returns a copy with counter-clockwise winding together with a flag that
+    /// is `false` when the input had to be reversed.
     #[inline]
     #[must_use]
-    pub fn normalize_winding(vertices: &mut [Vec2]) -> bool {
+    pub fn normalize_winding(vertices: &[Vec2]) -> (Vec<Vec2>, bool) {
         if vertices.len() < 3 {
-            return true;
+            return (vertices.to_vec(), true);
         }
 
-        let mut area = 0.0;
-        let n = vertices.len();
-        
-        for i in 0..n {
-            let v1 = vertices[i];
-            let v2 = vertices[(i + 1) % n];
-            area += v1.cross(v2);
-        }
-
-        if area < 0.0 {
-            vertices.reverse();
-            false
+        if polygon_signed_area(vertices) < 0.0 {
+            let mut reversed = vertices.to_vec();
+            reversed.reverse();
+            (reversed, false)
         } else {
-            true
+            (vertices.to_vec(), true)
         }
     }
 
-    /// Remove duplicate and degenerate vertices from a polygon
+    /// Remove duplicate, collinear and degenerate vertices from a polygon
+    ///
+    /// A vertex is dropped when it coincides with its neighbour, or when the
+    /// turn it forms with its neighbours is (numerically) zero. The result may
+    /// contain fewer than three vertices, in which case the polygon is
+    /// degenerate.
     #[inline]
-    pub fn clean_polygon_vertices(vertices: &mut Vec<Vec2>) {
-        if vertices.len() < 3 {
-            return;
+    #[must_use]
+    pub fn clean_polygon_vertices(vertices: &[Vec2]) -> Vec<Vec2> {
+        let n = vertices.len();
+        if n < 3 {
+            return Vec::new();
         }
 
-        let mut cleaned = Vec::with_capacity(vertices.len());
-        let n = vertices.len();
+        let mut cleaned: Vec<Vec2> = Vec::with_capacity(n);
 
         for i in 0..n {
-            let v1 = vertices[i];
-            let v2 = vertices[(i + 1) % n];
-            let v3 = vertices[(i + 2) % n];
-            
-            let edge1 = v2 - v1;
-            let edge2 = v3 - v2;
-            
-            // Skip if edge1 is degenerate
-            if edge1.length_squared() < crate::constants::EPSILON * crate::constants::EPSILON {
-                continue;
-            }
-            
-            // Skip if edge1 and edge2 are colinear
-            let cross = edge1.cross(edge2);
-            if cross.abs() < crate::constants::EPSILON {
+            let previous = vertices[(i + n - 1) % n];
+            let current = vertices[i];
+            let next = vertices[(i + 1) % n];
+
+            let incoming = current - previous;
+            let outgoing = next - current;
+
+            let incoming_length_sq = incoming.length_squared();
+            let outgoing_length_sq = outgoing.length_squared();
+
+            // Drop coincident vertices
+            if incoming_length_sq <= EPSILON * EPSILON || outgoing_length_sq <= EPSILON * EPSILON {
                 continue;
             }
 
-            cleaned.push(v1);
+            // Drop collinear vertices (zero turn)
+            let cross = incoming.cross(outgoing);
+            let scale = (incoming_length_sq * outgoing_length_sq).sqrt();
+            if cross.abs() <= EPSILON * scale {
+                continue;
+            }
+
+            cleaned.push(current);
         }
 
-        // Ensure we have at least 3 vertices
-        if cleaned.len() < 3 {
-            *vertices = Vec::new();
-        } else {
-            *vertices = cleaned;
-        }
+        cleaned
     }
 }
 

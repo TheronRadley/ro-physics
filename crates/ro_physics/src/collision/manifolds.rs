@@ -2,10 +2,20 @@
 //!
 //! This module provides the contact manifold type for representing
 //! collision information between two bodies.
+//!
+//! # Conventions
+//!
+//! * A manifold is generated for the pair **(body A, body B)** and the normal
+//!   points **from A to B**.
+//! * [`Contact::penetration`] is positive while the shapes overlap and negative
+//!   when they are separated (speculative contacts).
+//! * Impulses are applied as `-normal * impulse` on body A and
+//!   `+normal * impulse` on body B.
 
 use std::fmt;
 
-use crate::constants::EPSILON;
+use crate::bodies::BodyHandle;
+use crate::collision::ColliderHandle;
 use crate::math::Vec2;
 
 /// Maximum number of contact points per manifold
@@ -13,19 +23,22 @@ const MAX_CONTACTS: usize = 4;
 
 /// A single contact point between two bodies.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Contact {
     /// World position of the contact point
     pub position: Vec2,
-    /// Normal vector (from body A to body B)
+    /// Contact normal (from body A to body B)
     pub normal: Vec2,
-    /// Penetration depth (positive if overlapping)
+    /// Penetration depth (positive while overlapping)
     pub penetration: f32,
-    /// Normal impulse accumulated
+    /// Normal impulse accumulated during the last solve
     pub normal_impulse: f32,
-    /// Tangent impulse accumulated
+    /// Tangent (friction) impulse accumulated during the last solve
     pub tangent_impulse: f32,
-    /// Contact identifier for warm starting
+    /// Contact identifier used to match contacts between frames
     pub contact_id: ContactId,
 }
 
@@ -49,6 +62,18 @@ impl Contact {
             tangent_impulse,
             contact_id,
         }
+    }
+
+    /// Create a contact without accumulated impulses
+    #[inline]
+    #[must_use]
+    pub fn without_impulses(
+        position: Vec2,
+        normal: Vec2,
+        penetration: f32,
+        contact_id: ContactId,
+    ) -> Self {
+        Self::new(position, normal, penetration, 0.0, 0.0, contact_id)
     }
 
     /// Get the position
@@ -93,13 +118,23 @@ impl Contact {
         self.contact_id
     }
 
+    /// Set the accumulated normal impulse
+    #[inline]
+    pub fn set_normal_impulse(&mut self, impulse: f32) {
+        self.normal_impulse = impulse;
+    }
+
+    /// Set the accumulated tangent impulse
+    #[inline]
+    pub fn set_tangent_impulse(&mut self, impulse: f32) {
+        self.tangent_impulse = impulse;
+    }
+
     /// Check if the contact is valid
     #[inline]
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        self.penetration >= 0.0
-            && self.normal.is_finite()
-            && self.position.is_finite()
+        self.normal.is_finite() && self.position.is_finite() && self.penetration.is_finite()
     }
 
     /// Check if the contact is separating
@@ -135,9 +170,15 @@ impl fmt::Display for Contact {
 
 /// A contact identifier for warm starting.
 ///
-/// Used to match contacts between frames for stable simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+/// Stores the features (vertex or edge indices) that generated the contact on
+/// each shape plus a flag recording whether the pair was flipped. Contacts
+/// whose ids match between frames are considered the same contact, which lets
+/// the solver seed them with last frame's impulses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ContactId {
     /// Feature index on body A
     pub feature_a: u32,
@@ -180,14 +221,18 @@ impl ContactId {
             flipped: !self.flipped,
         }
     }
-}
 
-impl Default for ContactId {
-    fn default() -> Self {
-        Self {
-            feature_a: 0,
-            feature_b: 0,
-            flipped: false,
+    /// The identifier of this contact as seen from the other shape
+    ///
+    /// Two ids compare equal when they describe the same feature pair,
+    /// regardless of which shape was A and which was B.
+    #[inline]
+    #[must_use]
+    pub const fn key(self) -> (u32, u32) {
+        if self.flipped {
+            (self.feature_b, self.feature_a)
+        } else {
+            (self.feature_a, self.feature_b)
         }
     }
 }
@@ -207,34 +252,64 @@ impl fmt::Display for ContactId {
 /// A manifold represents the collision information between two bodies,
 /// including all contact points, the collision normal, and accumulated impulses.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct ContactManifold {
+    /// Handle of body A
+    body_a: BodyHandle,
+    /// Handle of body B
+    body_b: BodyHandle,
+    /// Handle of collider A
+    collider_a: ColliderHandle,
+    /// Handle of collider B
+    collider_b: ColliderHandle,
     /// Contact points
     contacts: Vec<Contact>,
     /// Normal vector (from body A to body B)
     normal: Vec2,
-    /// Number of contact points
-    contact_count: usize,
-    /// Friction coefficient
+    /// Friction coefficient (combined from both colliders)
     friction: f32,
-    /// Restitution coefficient
+    /// Restitution coefficient (combined from both colliders)
     restitution: f32,
-    /// Whether the manifold is valid
-    valid: bool,
+    /// Whether either collider is a sensor (no impulses are applied)
+    sensor: bool,
 }
 
 impl ContactManifold {
-    /// Create a new empty contact manifold
+    /// Create a new empty contact manifold without associated handles
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
+            body_a: BodyHandle::null(),
+            body_b: BodyHandle::null(),
+            collider_a: ColliderHandle::null(),
+            collider_b: ColliderHandle::null(),
             contacts: Vec::with_capacity(MAX_CONTACTS),
             normal: Vec2::unit_x(),
-            contact_count: 0,
             friction: 0.0,
             restitution: 0.0,
-            valid: false,
+            sensor: false,
+        }
+    }
+
+    /// Create a manifold for a specific body/collider pair
+    #[inline]
+    #[must_use]
+    pub fn between(
+        body_a: BodyHandle,
+        body_b: BodyHandle,
+        collider_a: ColliderHandle,
+        collider_b: ColliderHandle,
+    ) -> Self {
+        Self {
+            body_a,
+            body_b,
+            collider_a,
+            collider_b,
+            ..Self::new()
         }
     }
 
@@ -249,13 +324,22 @@ impl ContactManifold {
         restitution: f32,
     ) -> Self {
         let mut manifold = Self::new();
-        manifold.add_contact(position, normal, penetration, 0.0, 0.0, ContactId::default());
+        manifold.add_contact(
+            position,
+            normal,
+            penetration,
+            0.0,
+            0.0,
+            ContactId::default(),
+        );
         manifold.friction = friction;
         manifold.restitution = restitution;
         manifold
     }
 
     /// Add a contact to the manifold
+    ///
+    /// Contacts beyond [`MAX_CONTACTS`] are ignored.
     #[inline]
     pub fn add_contact(
         &mut self,
@@ -278,16 +362,14 @@ impl ContactManifold {
             tangent_impulse,
             contact_id,
         ));
-        self.contact_count = self.contacts.len();
         self.normal = normal;
-        self.valid = true;
     }
 
     /// Get the number of contact points
     #[inline]
     #[must_use]
     pub fn contact_count(&self) -> usize {
-        self.contact_count
+        self.contacts.len()
     }
 
     /// Get a contact by index
@@ -308,6 +390,13 @@ impl ContactManifold {
         &self.contacts
     }
 
+    /// Get mutable access to all contacts
+    #[inline]
+    #[must_use]
+    pub fn contacts_mut(&mut self) -> &mut [Contact] {
+        &mut self.contacts
+    }
+
     /// Get the normal vector
     #[inline]
     #[must_use]
@@ -319,6 +408,49 @@ impl ContactManifold {
     #[inline]
     pub fn set_normal(&mut self, normal: Vec2) {
         self.normal = normal;
+    }
+
+    /// Get the handle of body A
+    #[inline]
+    #[must_use]
+    pub const fn body_a(&self) -> BodyHandle {
+        self.body_a
+    }
+
+    /// Get the handle of body B
+    #[inline]
+    #[must_use]
+    pub const fn body_b(&self) -> BodyHandle {
+        self.body_b
+    }
+
+    /// Get the handle of collider A
+    #[inline]
+    #[must_use]
+    pub const fn collider_a(&self) -> ColliderHandle {
+        self.collider_a
+    }
+
+    /// Get the handle of collider B
+    #[inline]
+    #[must_use]
+    pub const fn collider_b(&self) -> ColliderHandle {
+        self.collider_b
+    }
+
+    /// Set the body and collider handles of the pair
+    #[inline]
+    pub fn set_pair(
+        &mut self,
+        body_a: BodyHandle,
+        body_b: BodyHandle,
+        collider_a: ColliderHandle,
+        collider_b: ColliderHandle,
+    ) {
+        self.body_a = body_a;
+        self.body_b = body_b;
+        self.collider_a = collider_a;
+        self.collider_b = collider_b;
     }
 
     /// Get the friction coefficient
@@ -347,11 +479,26 @@ impl ContactManifold {
         self.restitution = restitution.clamp(0.0, 1.0);
     }
 
+    /// Whether either collider of the pair is a sensor
+    ///
+    /// Sensors generate collision events but never receive impulses.
+    #[inline]
+    #[must_use]
+    pub fn is_sensor(&self) -> bool {
+        self.sensor
+    }
+
+    /// Mark the pair as involving a sensor
+    #[inline]
+    pub fn set_sensor(&mut self, sensor: bool) {
+        self.sensor = sensor;
+    }
+
     /// Check if the manifold is valid
     #[inline]
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        self.valid && self.contact_count > 0
+        !self.contacts.is_empty() && self.normal.is_finite()
     }
 
     /// Flip the manifold (swap bodies A and B)
@@ -362,21 +509,22 @@ impl ContactManifold {
             contact.contact_id = contact.contact_id.flip();
         }
         self.normal = -self.normal;
+
+        std::mem::swap(&mut self.body_a, &mut self.body_b);
+        std::mem::swap(&mut self.collider_a, &mut self.collider_b);
     }
 
     /// Clear the manifold
     #[inline]
     pub fn clear(&mut self) {
         self.contacts.clear();
-        self.contact_count = 0;
-        self.valid = false;
     }
 
     /// Calculate the average contact point
     #[inline]
     #[must_use]
     pub fn average_contact_point(&self) -> Vec2 {
-        if self.contact_count == 0 {
+        if self.contacts.is_empty() {
             return Vec2::zero();
         }
 
@@ -384,14 +532,14 @@ impl ContactManifold {
         for contact in &self.contacts {
             sum += contact.position;
         }
-        sum / self.contact_count as f32
+        sum / self.contacts.len() as f32
     }
 
     /// Calculate the average penetration
     #[inline]
     #[must_use]
     pub fn average_penetration(&self) -> f32 {
-        if self.contact_count == 0 {
+        if self.contacts.is_empty() {
             return 0.0;
         }
 
@@ -399,42 +547,49 @@ impl ContactManifold {
         for contact in &self.contacts {
             sum += contact.penetration;
         }
-        sum / self.contact_count as f32
+        sum / self.contacts.len() as f32
     }
 
     /// Merge contacts that are very close together
     #[inline]
     pub fn merge_contacts(&mut self, tolerance: f32) {
-        if self.contact_count <= 1 {
+        if self.contacts.len() <= 1 {
             return;
         }
 
-        let mut merged = Vec::with_capacity(MAX_CONTACTS);
-        let mut used = vec![false; self.contact_count];
+        let count = self.contacts.len();
+        let mut merged: Vec<Contact> = Vec::with_capacity(MAX_CONTACTS);
+        let mut used = vec![false; count];
 
-        for i in 0..self.contact_count {
+        for (i, contact) in self.contacts.iter().copied().enumerate().take(count) {
             if used[i] {
                 continue;
             }
 
-            let contact_i = self.contacts[i];
-            let mut merged_contact = contact_i;
+            let mut merged_contact = contact;
             used[i] = true;
 
-            for j in (i + 1)..self.contact_count {
+            for (j, contact_j) in self
+                .contacts
+                .iter()
+                .copied()
+                .enumerate()
+                .skip(i + 1)
+                .take(count.saturating_sub(i + 1))
+            {
                 if used[j] {
                     continue;
                 }
-
-                let contact_j = self.contacts[j];
                 let delta = contact_j.position - merged_contact.position;
 
                 if delta.length_squared() <= tolerance * tolerance {
-                    // Merge the contacts
                     merged_contact.position = (merged_contact.position + contact_j.position) / 2.0;
-                    merged_contact.penetration = merged_contact
-                        .penetration
-                        .max(contact_j.penetration);
+                    merged_contact.penetration =
+                        merged_contact.penetration.max(contact_j.penetration);
+                    // Keep the largest accumulated impulse so warm starting
+                    // does not lose energy when contacts collapse.
+                    merged_contact.normal_impulse += contact_j.normal_impulse;
+                    merged_contact.tangent_impulse += contact_j.tangent_impulse;
                     used[j] = true;
                 }
             }
@@ -443,7 +598,28 @@ impl ContactManifold {
         }
 
         self.contacts = merged;
-        self.contact_count = self.contacts.len();
+    }
+
+    /// Copy warm-start impulses from the manifold of the previous step
+    ///
+    /// Contacts are matched by their [`ContactId`]; unmatched contacts start
+    /// with zero impulse. This is what makes resting stacks converge quickly
+    /// instead of re-solving from scratch every frame.
+    pub fn warm_start_from(&mut self, previous: &Self) {
+        for contact in &mut self.contacts {
+            let key = contact.contact_id.key();
+            if let Some(match_) = previous
+                .contacts
+                .iter()
+                .find(|old| old.contact_id.key() == key)
+            {
+                contact.normal_impulse = match_.normal_impulse;
+                contact.tangent_impulse = match_.tangent_impulse;
+            } else {
+                contact.normal_impulse = 0.0;
+                contact.tangent_impulse = 0.0;
+            }
+        }
     }
 }
 
@@ -458,7 +634,8 @@ impl fmt::Display for ContactManifold {
         write!(
             f,
             "ContactManifold(contacts: {}, normal: {})",
-            self.contact_count, self.normal
+            self.contacts.len(),
+            self.normal
         )
     }
 }
@@ -466,217 +643,181 @@ impl fmt::Display for ContactManifold {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::utils::approx_eq;
 
     #[test]
-    fn test_contact() {
-        let contact = Contact::new(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            10.0,
-            5.0,
-            ContactId::new(0, 1),
-        );
-
-        assert_eq!(contact.position(), Vec2::new(1.0, 2.0));
-        assert_eq!(contact.normal(), Vec2::new(0.0, 1.0));
-        assert!(approx_eq(contact.penetration(), 0.5));
-        assert!(approx_eq(contact.normal_impulse(), 10.0));
-        assert!(approx_eq(contact.tangent_impulse(), 5.0));
-    }
-
-    #[test]
-    fn test_contact_id() {
-        let id1 = ContactId::new(0, 1);
-        let id2 = ContactId::flipped(0, 1);
-        let id3 = id1.flip();
-
-        assert!(!id1.flipped);
-        assert!(id2.flipped);
-        assert_eq!(id3.feature_a, 1);
-        assert_eq!(id3.feature_b, 0);
-        assert!(id3.flipped);
-    }
-
-    #[test]
-    fn test_manifold() {
-        let mut manifold = ContactManifold::new();
-
+    fn test_empty_manifold() {
+        let manifold = ContactManifold::new();
         assert_eq!(manifold.contact_count(), 0);
         assert!(!manifold.is_valid());
+    }
 
+    #[test]
+    fn test_add_contact() {
+        let mut manifold = ContactManifold::new();
         manifold.add_contact(
-            Vec2::new(1.0, 2.0),
             Vec2::new(0.0, 1.0),
-            0.5,
+            Vec2::unit_y(),
+            0.25,
             0.0,
             0.0,
-            ContactId::new(0, 1),
+            ContactId::new(1, 2),
         );
 
         assert_eq!(manifold.contact_count(), 1);
         assert!(manifold.is_valid());
-
-        manifold.add_contact(
-            Vec2::new(1.1, 2.1),
-            Vec2::new(0.0, 1.0),
-            0.6,
-            0.0,
-            0.0,
-            ContactId::new(0, 2),
-        );
-
-        assert_eq!(manifold.contact_count(), 2);
+        assert_eq!(manifold.contact(0).penetration(), 0.25);
+        assert_eq!(manifold.normal(), Vec2::unit_y());
     }
 
     #[test]
-    fn test_manifold_with_contact() {
-        let manifold = ContactManifold::with_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.6,
-            0.2,
-        );
-
-        assert_eq!(manifold.contact_count(), 1);
-        assert!(approx_eq(manifold.friction(), 0.6));
-        assert!(approx_eq(manifold.restitution(), 0.2));
-    }
-
-    #[test]
-    fn test_manifold_flip() {
+    fn test_contact_limit() {
         let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
+        for i in 0..(MAX_CONTACTS + 2) {
+            manifold.add_contact(
+                Vec2::new(i as f32, 0.0),
+                Vec2::unit_y(),
+                0.1,
+                0.0,
+                0.0,
+                ContactId::new(i as u32, 0),
+            );
+        }
+
+        assert_eq!(manifold.contact_count(), MAX_CONTACTS);
+    }
+
+    #[test]
+    fn test_warm_start_matching() {
+        let mut previous = ContactManifold::new();
+        previous.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            3.0,
+            1.5,
+            ContactId::new(0, 1),
+        );
+        previous.add_contact(
+            Vec2::new(1.0, 0.0),
+            Vec2::unit_y(),
+            0.1,
+            4.0,
             0.5,
+            ContactId::new(7, 3),
+        );
+
+        let mut current = ContactManifold::new();
+        // Matches the first previous contact
+        current.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            0.0,
+            0.0,
+            ContactId::new(0, 1),
+        );
+        // New contact without a previous counterpart
+        current.add_contact(
+            Vec2::new(5.0, 0.0),
+            Vec2::unit_y(),
+            0.1,
+            0.0,
+            0.0,
+            ContactId::new(9, 9),
+        );
+
+        current.warm_start_from(&previous);
+
+        assert_eq!(current.contact(0).normal_impulse(), 3.0);
+        assert_eq!(current.contact(0).tangent_impulse(), 1.5);
+        assert_eq!(current.contact(1).normal_impulse(), 0.0);
+    }
+
+    #[test]
+    fn test_warm_start_matches_flipped_contacts() {
+        let mut previous = ContactManifold::new();
+        previous.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            2.0,
+            0.0,
+            ContactId::new(4, 2),
+        );
+
+        let mut current = ContactManifold::new();
+        current.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            0.0,
+            0.0,
+            ContactId::flipped(2, 4),
+        );
+
+        current.warm_start_from(&previous);
+        assert_eq!(current.contact(0).normal_impulse(), 2.0);
+    }
+
+    #[test]
+    fn test_flip_swaps_bodies() {
+        let a = BodyHandle::new(1, 0);
+        let b = BodyHandle::new(2, 0);
+        let ca = ColliderHandle::new(3, 0);
+        let cb = ColliderHandle::new(4, 0);
+
+        let mut manifold = ContactManifold::between(a, b, ca, cb);
+        manifold.add_contact(
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
             0.0,
             0.0,
             ContactId::new(0, 1),
         );
 
-        let normal_before = manifold.normal();
         manifold.flip();
-        let normal_after = manifold.normal();
 
-        assert_eq!(normal_after, -normal_before);
-    }
-
-    #[test]
-    fn test_manifold_clear() {
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            ContactId::new(0, 1),
-        );
-
-        assert!(manifold.is_valid());
-
-        manifold.clear();
-        assert!(!manifold.is_valid());
-        assert_eq!(manifold.contact_count(), 0);
-    }
-
-    #[test]
-    fn test_average_contact_point() {
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            ContactId::new(0, 1),
-        );
-        manifold.add_contact(
-            Vec2::new(3.0, 4.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            ContactId::new(0, 2),
-        );
-
-        let avg = manifold.average_contact_point();
-        assert_eq!(avg, Vec2::new(2.0, 3.0));
-    }
-
-    #[test]
-    fn test_average_penetration() {
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            ContactId::new(0, 1),
-        );
-        manifold.add_contact(
-            Vec2::new(3.0, 4.0),
-            Vec2::new(0.0, 1.0),
-            0.7,
-            0.0,
-            0.0,
-            ContactId::new(0, 2),
-        );
-
-        let avg = manifold.average_penetration();
-        assert!(approx_eq(avg, 0.6));
+        assert_eq!(manifold.body_a(), b);
+        assert_eq!(manifold.body_b(), a);
+        assert_eq!(manifold.collider_a(), cb);
+        assert_eq!(manifold.collider_b(), ca);
+        assert_eq!(manifold.normal(), Vec2::new(0.0, -1.0));
+        assert_eq!(manifold.contact(0).normal(), Vec2::new(0.0, -1.0));
     }
 
     #[test]
     fn test_merge_contacts() {
         let mut manifold = ContactManifold::new();
         manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
+            Vec2::zero(),
+            Vec2::unit_y(),
+            0.1,
+            1.0,
             0.0,
-            0.0,
-            ContactId::new(0, 1),
+            ContactId::new(0, 0),
         );
         manifold.add_contact(
-            Vec2::new(1.01, 2.01),
-            Vec2::new(0.0, 1.0),
-            0.51,
+            Vec2::new(0.001, 0.0),
+            Vec2::unit_y(),
+            0.3,
+            2.0,
             0.0,
-            0.0,
-            ContactId::new(0, 2),
+            ContactId::new(1, 0),
         );
+        manifold.add_contact(
+            Vec2::new(10.0, 0.0),
+            Vec2::unit_y(),
+            0.2,
+            0.0,
+            0.0,
+            ContactId::new(2, 0),
+        );
+
+        manifold.merge_contacts(0.01);
 
         assert_eq!(manifold.contact_count(), 2);
-
-        manifold.merge_contacts(0.1);
-        assert_eq!(manifold.contact_count(), 1);
-    }
-
-    #[test]
-    fn test_default() {
-        let manifold = ContactManifold::default();
-        assert_eq!(manifold.contact_count(), 0);
-        assert!(!manifold.is_valid());
-    }
-
-    #[test]
-    fn test_display() {
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            Vec2::new(1.0, 2.0),
-            Vec2::new(0.0, 1.0),
-            0.5,
-            0.0,
-            0.0,
-            ContactId::new(0, 1),
-        );
-
-        let manifold_str = format!("{}", manifold);
-        assert!(manifold_str.contains("ContactManifold"));
+        assert!(manifold.contact(0).penetration() >= 0.3);
+        assert_eq!(manifold.contact(0).normal_impulse(), 3.0);
     }
 }

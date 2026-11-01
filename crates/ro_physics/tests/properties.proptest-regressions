@@ -1,0 +1,3 @@
+# Seeds for regressions that proptest has found in this file. They are replayed
+# before the generated cases on every run.
+cc 75e86856686187d0a518e6356ced05b5966906003c17f1e2895038fe82cf0441

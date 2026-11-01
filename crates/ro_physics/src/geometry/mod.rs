@@ -38,10 +38,7 @@ pub mod utils {
         if min_x > max_x || min_y > max_y {
             None
         } else {
-            Some(Aabb::new(
-                Vec2::new(min_x, min_y),
-                Vec2::new(max_x, max_y),
-            ))
+            Some(Aabb::new(Vec2::new(min_x, min_y), Vec2::new(max_x, max_y)))
         }
     }
 
@@ -49,10 +46,7 @@ pub mod utils {
     #[inline]
     #[must_use]
     pub fn aabb_overlaps(a: Aabb, b: Aabb) -> bool {
-        a.min.x <= b.max.x
-            && a.max.x >= b.min.x
-            && a.min.y <= b.max.y
-            && a.max.y >= b.min.y
+        a.min.x <= b.max.x && a.max.x >= b.min.x && a.min.y <= b.max.y && a.max.y >= b.min.y
     }
 
     /// Calculate the distance between two AABBs

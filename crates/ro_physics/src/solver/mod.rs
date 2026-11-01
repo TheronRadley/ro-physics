@@ -4,12 +4,12 @@
 //! collisions and constraints between bodies.
 
 mod config;
-mod sequential_impulse;
 mod contact_solver;
+mod sequential_impulse;
 
 pub use config::SolverConfig;
-pub use sequential_impulse::SequentialImpulseSolver;
 pub use contact_solver::ContactSolver;
+pub use sequential_impulse::SequentialImpulseSolver;
 
 /// Solver utilities
 pub mod utils {
@@ -32,8 +32,9 @@ pub mod utils {
         // Calculate the effective mass
         let r_a = contact_point_a;
         let r_b = contact_point_b;
-        
-        let effective_mass = inv_mass_a + inv_mass_b
+
+        let effective_mass = inv_mass_a
+            + inv_mass_b
             + r_a.cross(normal).powi(2) * inv_inertia_a
             + r_b.cross(normal).powi(2) * inv_inertia_b;
 
@@ -43,7 +44,7 @@ pub mod utils {
 
         // Calculate the impulse magnitude
         let impulse_magnitude = -(1.0 + restitution) * relative_velocity / effective_mass;
-        
+
         // Return the impulse vector
         normal * impulse_magnitude
     }
@@ -66,8 +67,9 @@ pub mod utils {
         // Calculate the effective mass for friction
         let r_a = contact_point_a;
         let r_b = contact_point_b;
-        
-        let effective_mass = inv_mass_a + inv_mass_b
+
+        let effective_mass = inv_mass_a
+            + inv_mass_b
             + r_a.cross(tangent).powi(2) * inv_inertia_a
             + r_b.cross(tangent).powi(2) * inv_inertia_b;
 
@@ -77,13 +79,13 @@ pub mod utils {
 
         // Calculate the maximum friction impulse (Coulomb friction)
         let max_friction = friction * normal_impulse.abs();
-        
+
         // Calculate the friction impulse magnitude
         let impulse_magnitude = -relative_velocity / effective_mass;
-        
+
         // Clamp to maximum friction
         let impulse_magnitude = impulse_magnitude.clamp(-max_friction, max_friction);
-        
+
         // Return the friction impulse vector
         tangent * impulse_magnitude
     }

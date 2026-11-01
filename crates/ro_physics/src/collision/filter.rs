@@ -11,7 +11,10 @@ use std::fmt;
 /// - Each body has a mask specifying which categories it can collide with (bits 0-15)
 /// - Two bodies collide if (categoryA & maskB) != 0 and (categoryB & maskA) != 0
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct Filter {
     /// Category bits (which categories this body belongs to)
     pub category_bits: u16,
@@ -67,24 +70,25 @@ impl Filter {
     }
 
     /// Check if this filter can collide with another filter
+    ///
+    /// Two colliders collide when each one's category is accepted by the
+    /// other's mask. A non-zero group index overrides the category/mask test
+    /// when both colliders share it: a positive group forces the pair to
+    /// collide, a negative group forces it never to collide (the standard
+    /// Box2D semantics).
     #[inline]
     #[must_use]
-    pub fn can_collide_with(self, other: &Self) -> bool {
+    pub fn can_collide_with(&self, other: &Self) -> bool {
+        // Group filtering takes precedence over the category/mask test
+        if self.group_index != 0 && self.group_index == other.group_index {
+            return self.group_index > 0;
+        }
+
         // Check category/mask collision
         if (self.category_bits & other.mask_bits) == 0 {
             return false;
         }
         if (other.category_bits & self.mask_bits) == 0 {
-            return false;
-        }
-
-        // Check group filtering
-        if self.group_index != 0 && self.group_index == other.group_index {
-            return true;
-        }
-
-        // Check negative group filtering
-        if self.group_index < 0 && other.group_index < 0 {
             return false;
         }
 
@@ -235,12 +239,17 @@ mod tests {
         assert!(filter1.can_collide_with(&filter2));
         assert!(!filter1.can_collide_with(&filter3));
 
-        // Test with mask
+        // Two colliders only collide when each accepts the other's category,
+        // which is what the mask bits are for
         let filter4 = Filter::new(0x0001, 0x0001 | 0x0002);
-        let filter5 = Filter::category(0x0002);
-        
+        let filter5 = Filter::new(0x0002, 0x0001 | 0x0002);
+
         assert!(filter4.can_collide_with(&filter5));
         assert!(filter5.can_collide_with(&filter4));
+
+        // Accepting category 1 is not enough on its own
+        let filter6 = Filter::new(0x0002, 0x0002);
+        assert!(!filter4.can_collide_with(&filter6));
     }
 
     #[test]

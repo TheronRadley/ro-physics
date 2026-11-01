@@ -4,16 +4,16 @@
 //! for the physics simulation.
 
 mod config;
-mod world;
+mod simulation;
+#[cfg(test)]
 mod tests;
 
 pub use config::WorldConfig;
-pub use world::World;
+pub use simulation::World;
 
 /// World utilities
 pub mod utils {
-    use super::World;
-    use crate::bodies::BodyHandle;
+    use super::{World, WorldConfig};
 
     /// Create a simple world with default settings
     #[inline]

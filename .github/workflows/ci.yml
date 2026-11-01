@@ -40,6 +40,43 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  cross-platform:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          cargo test --workspace --all --all-features 2>&1 | tee test-output.txt
+
+      # Job logs are not readable for this repository, so the output has to be
+      # uploaded to be of any use when one platform misbehaves.
+      - name: Upload the test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log-${{ matrix.os }}
+          path: test-output.txt
+
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
@@ -64,6 +101,19 @@ jobs:
           cd crates/ro_physics
           cargo bench --all-features
 
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Fails on crates with known security advisories (RUSTSEC database).
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest
@@ -78,7 +128,7 @@ jobs:
         run: cargo doc --workspace --all-features --no-deps
 
       - name: Upload documentation
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: documentation
           path: target/doc

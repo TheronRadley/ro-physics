@@ -6,18 +6,19 @@
 mod constraint;
 mod constraint_handle;
 mod distance_joint;
-mod revolute_joint;
 mod motor_joint;
+mod revolute_joint;
 
-pub use constraint::Constraint;
+pub use constraint::{BaseConstraint, Constraint, ConstraintType};
 pub use constraint_handle::{ConstraintHandle, ConstraintHandleGenerator};
 pub use distance_joint::DistanceJoint;
-pub use revolute_joint::RevoluteJoint;
 pub use motor_joint::MotorJoint;
+pub use revolute_joint::RevoluteJoint;
 
 /// Constraint utilities
 pub mod utils {
     use crate::bodies::Body;
+    use crate::constants::MAX_CORRECTION_SPEED;
     use crate::math::Vec2;
 
     /// Calculate the effective mass for a constraint along a given axis
@@ -38,7 +39,8 @@ pub mod utils {
         let ra_cross_axis = ra.cross(axis);
         let rb_cross_axis = rb.cross(axis);
 
-        let denominator = inv_mass_a + inv_mass_b
+        let denominator = inv_mass_a
+            + inv_mass_b
             + ra_cross_axis * ra_cross_axis * inv_inertia_a
             + rb_cross_axis * rb_cross_axis * inv_inertia_b;
 
@@ -50,10 +52,19 @@ pub mod utils {
     }
 
     /// Calculate the bias for Baumgarte stabilization
+    ///
+    /// The correction is `error / dt`, so it is capped at
+    /// [`MAX_CORRECTION_SPEED`](crate::constants::MAX_CORRECTION_SPEED): a very
+    /// short step would otherwise produce an unbounded velocity and launch the
+    /// body. A non-positive timestep yields no correction at all.
     #[inline]
     #[must_use]
     pub fn calculate_bias(error: f32, baumgarte_factor: f32, dt: f32) -> f32 {
-        baumgarte_factor * error / dt
+        if dt <= crate::constants::EPSILON {
+            return 0.0;
+        }
+
+        (baumgarte_factor * error / dt).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED)
     }
 }
 

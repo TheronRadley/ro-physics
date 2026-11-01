@@ -3,14 +3,18 @@
 //! This module provides mass, inertia, and center of mass calculations
 //! for various shape types.
 
+use crate::math::utils::approx_eq;
 use crate::math::Vec2;
 
 /// Mass properties for a shape.
 ///
 /// Contains the mass, inertia, and center of mass information
 /// needed for rigid-body physics.
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(
+    feature = "serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct MassProperties {
     /// Mass of the shape
     pub mass: f32,
@@ -28,11 +32,7 @@ impl MassProperties {
     /// Create new mass properties
     #[inline]
     #[must_use]
-    pub fn new(
-        mass: f32,
-        inertia: f32,
-        center_of_mass: Vec2,
-    ) -> Self {
+    pub fn new(mass: f32, inertia: f32, center_of_mass: Vec2) -> Self {
         let inv_mass = if mass > 0.0 { 1.0 / mass } else { 0.0 };
         let inv_inertia = if inertia > 0.0 { 1.0 / inertia } else { 0.0 };
 
@@ -127,6 +127,22 @@ impl MassProperties {
     }
 }
 
+impl PartialEq for MassProperties {
+    /// Compare with the usual floating point tolerance
+    ///
+    /// Masses and inertias are computed through several floating point steps,
+    /// so an exact comparison would report equal shapes as different.
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        approx_eq(self.mass, other.mass)
+            && approx_eq(self.inertia, other.inertia)
+            && approx_eq(self.inv_mass, other.inv_mass)
+            && approx_eq(self.inv_inertia, other.inv_inertia)
+            && approx_eq(self.center_of_mass.x, other.center_of_mass.x)
+            && approx_eq(self.center_of_mass.y, other.center_of_mass.y)
+    }
+}
+
 impl Default for MassProperties {
     fn default() -> Self {
         Self::static_body()
@@ -137,6 +153,7 @@ impl Default for MassProperties {
 mod tests {
     use super::*;
     use crate::constants::EPSILON;
+    use crate::math::utils::approx_eq;
 
     #[test]
     fn test_construction() {
@@ -171,7 +188,7 @@ mod tests {
     fn test_scaled() {
         let mp = MassProperties::dynamic(10.0, 5.0);
         let scaled = mp.scaled(2.0);
-        
+
         assert_eq!(scaled.mass, 20.0);
         assert!(approx_eq(scaled.inv_mass, 0.05));
         assert_eq!(scaled.inertia, 10.0);
@@ -182,7 +199,7 @@ mod tests {
     fn test_translated() {
         let mp = MassProperties::dynamic(10.0, 5.0);
         let translated = mp.translated(Vec2::new(1.0, 2.0));
-        
+
         assert_eq!(translated.center_of_mass, Vec2::new(1.0, 2.0));
         assert_eq!(translated.mass, 10.0);
     }
@@ -191,7 +208,7 @@ mod tests {
     fn test_transformed() {
         let mp = MassProperties::dynamic(10.0, 5.0);
         let transformed = mp.transformed(Vec2::new(1.0, 2.0));
-        
+
         // Parallel axis theorem: I' = I + m * d^2 = 5 + 10 * (1 + 4) = 55
         assert_eq!(transformed.inertia, 55.0);
         assert!(approx_eq(transformed.inv_inertia, 1.0 / 55.0));
@@ -200,18 +217,10 @@ mod tests {
 
     #[test]
     fn test_approx_eq() {
-        use crate::math::utils::approx_eq;
-        
         let mp1 = MassProperties::dynamic(10.0, 5.0);
         let mp2 = MassProperties::new(10.0, 5.0 + EPSILON, Vec2::zero());
-        
+
         // This tests the PartialEq implementation
         assert_eq!(mp1, mp2);
     }
-}
-
-// Helper function for tests
-#[allow(dead_code)]
-fn approx_eq(a: f32, b: f32, epsilon: f32 = EPSILON) -> bool {
-    (a - b).abs() <= epsilon
 }
