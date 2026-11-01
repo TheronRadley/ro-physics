@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_solve_updates_bodies_in_place() {
-        use crate::collision::{ColliderHandle, Contact, ContactId};
+        use crate::collision::{ColliderHandle, ContactId};
 
         let handle_a = BodyHandle::new(1, 0);
         let handle_b = BodyHandle::new(2, 0);

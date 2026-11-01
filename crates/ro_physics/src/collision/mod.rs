@@ -63,7 +63,7 @@ pub mod utils {
         contact_point: Vec2,
         normal: Vec2,
     ) -> f32 {
-        let rel_vel = Self::relative_velocity(
+        let rel_vel = relative_velocity(
             velocity1, angular1, position1,
             velocity2, angular2, position2,
             contact_point,
@@ -78,10 +78,8 @@ pub mod utils {
         let axis_normalized = axis.normalize();
         
         // Project both AABBs onto the axis
-        let min1 = Self::project_aabb(aabb1, axis_normalized).0;
-        let max1 = Self::project_aabb(aabb1, axis_normalized).1;
-        let min2 = Self::project_aabb(aabb2, axis_normalized).0;
-        let max2 = Self::project_aabb(aabb2, axis_normalized).1;
+        let (min1, max1) = project_aabb(aabb1, axis_normalized);
+        let (min2, max2) = project_aabb(aabb2, axis_normalized);
         
         // Check for separation
         max1 < min2 || max2 < min1

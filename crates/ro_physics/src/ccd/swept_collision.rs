@@ -149,7 +149,6 @@ impl SweptCollisionDetector {
                     self.config.toi_tolerance,
                 )
             }
-            _ => ToiResult::new(1.0, false, 0),
         }
     }
 
@@ -247,7 +246,7 @@ mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
     use crate::collision::ColliderHandle;
-    use crate::shapes::{Circle, Polygon};
+    use crate::shapes::Circle;
 
     #[test]
     fn test_construction() {

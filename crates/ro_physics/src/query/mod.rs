@@ -6,6 +6,7 @@ mod point_query;
 mod aabb_query;
 mod ray_cast;
 mod bvh;
+#[cfg(test)]
 mod tests;
 
 pub use point_query::{PointQuery, PointQueryResult};

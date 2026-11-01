@@ -6,6 +6,7 @@
 mod config;
 mod toi;
 mod swept_collision;
+#[cfg(test)]
 mod tests;
 
 pub use config::CcdConfig;

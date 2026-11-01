@@ -258,7 +258,7 @@ impl TimeOfImpact {
             );
             
             toi += advance * remaining;
-            remaining *= (1.0 - advance);
+            remaining *= 1.0 - advance;
             
             if advance < tolerance {
                 // No collision found
@@ -318,7 +318,7 @@ impl TimeOfImpact {
             );
             
             toi += advance * remaining;
-            remaining *= (1.0 - advance);
+            remaining *= 1.0 - advance;
             
             if advance < tolerance {
                 // No collision found

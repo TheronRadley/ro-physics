@@ -50,7 +50,6 @@ const MAX_CCD_SUBSTEPS: usize = 4;
 /// Positions and sizes are in metres, velocities in metres per second, angles
 /// in radians and masses in kilograms. Gravity defaults to `(0, -9.81)`, i.e.
 /// +Y is up.
-#[derive(Debug)]
 pub struct World {
     /// Configuration
     config: WorldConfig,
@@ -1422,6 +1421,20 @@ impl World {
         self.events.clear();
         self.time = 0.0;
         self.frame_count = 0;
+    }
+}
+
+impl fmt::Debug for World {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("World")
+            .field("config", &self.config)
+            .field("bodies", &self.body_count())
+            .field("colliders", &self.collider_count())
+            .field("constraints", &self.constraint_count())
+            .field("handlers", &self.event_handlers.len())
+            .field("time", &self.time)
+            .field("frame_count", &self.frame_count)
+            .finish_non_exhaustive()
     }
 }
 

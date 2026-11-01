@@ -5,6 +5,7 @@
 
 mod config;
 mod world;
+#[cfg(test)]
 mod tests;
 
 pub use config::WorldConfig;

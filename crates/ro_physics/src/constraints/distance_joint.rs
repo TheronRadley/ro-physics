@@ -267,18 +267,25 @@ impl Constraint for DistanceJoint {
         self.effective_mass = self.calculate_effective_mass(body_a, body_b, direction, ra, rb);
 
         if self.effective_mass > EPSILON {
-            // Calculate bias for position correction
-            let error = distance - self.length;
+            // A rigid joint (min == max == length) always drives towards
+            // `length`; a joint with a soft range only acts outside of it.
+            let soft_range = (self.max_length - self.min_length) > EPSILON;
+            let error = if distance < self.min_length {
+                distance - self.min_length
+            } else if distance > self.max_length {
+                distance - self.max_length
+            } else if soft_range {
+                // Inside the allowed range: the joint is inactive this step.
+                self.effective_mass = 0.0;
+                self.bias = 0.0;
+                return;
+            } else {
+                distance - self.length
+            };
+
             self.bias = self.calculate_bias(error, dt);
         } else {
             self.bias = 0.0;
-        }
-
-        // Apply damping
-        if self.damping > EPSILON {
-            let relative_velocity = self.calculate_relative_velocity(body_a, body_b, direction);
-            let damping_factor = 1.0 - self.damping;
-            // Damping is applied in solve()
         }
     }
 
@@ -301,19 +308,16 @@ impl Constraint for DistanceJoint {
             Vec2::unit_x()
         };
 
-        // Calculate relative positions
-        let ra = anchor_a - body_a.position();
-        let rb = anchor_b - body_b.position();
-
-        // Calculate relative velocity along the constraint axis
+        // Separation velocity along the constraint axis (positive means the
+        // anchors are moving apart)
         let relative_velocity = self.calculate_relative_velocity(body_a, body_b, direction);
 
         // Calculate the constraint impulse
-        let mut impulse = self.calculate_impulse(body_a, body_b, relative_velocity, distance);
+        let mut impulse = self.calculate_impulse(relative_velocity);
 
-        // Apply damping
+        // Damping removes energy along the constraint axis
         if self.damping > EPSILON {
-            impulse *= 1.0 - self.damping;
+            impulse -= self.damping * self.effective_mass * relative_velocity;
         }
 
         // Apply stiffness (soft constraint)
@@ -378,43 +382,36 @@ impl DistanceJoint {
     fn calculate_bias(&self, error: f32, dt: f32) -> f32 {
         // Baumgarte factor
         const BAUMGARTE_FACTOR: f32 = 0.2;
+
+        if dt <= EPSILON {
+            return 0.0;
+        }
+
         BAUMGARTE_FACTOR * error / dt
     }
 
-    /// Calculate relative velocity along an axis
+    /// Calculate the separation velocity along an axis
+    ///
+    /// Positive values mean the two anchors are moving apart.
     #[inline]
     fn calculate_relative_velocity(&self, body_a: &Body, body_b: &Body, axis: Vec2) -> f32 {
         let va = body_a.velocity_at_point(self.world_anchor_a(body_a));
         let vb = body_b.velocity_at_point(self.world_anchor_b(body_b));
-        (va - vb).dot(axis)
+        (vb - va).dot(axis)
     }
 
     /// Calculate the impulse to apply
+    ///
+    /// `relative_velocity` is the separation velocity along the constraint
+    /// axis, so the impulse has to cancel both that velocity and the
+    /// Baumgarte bias.
     #[inline]
-    fn calculate_impulse(
-        &self,
-        body_a: &Body,
-        body_b: &Body,
-        relative_velocity: f32,
-        distance: f32,
-    ) -> f32 {
+    fn calculate_impulse(&self, relative_velocity: f32) -> f32 {
         if self.effective_mass <= EPSILON {
             return 0.0;
         }
 
-        // Calculate error and bias
-        let error = distance - self.length;
-        let bias = self.bias;
-
-        // Position correction using pseudo-velocities
-        let position_impulse = bias * self.effective_mass;
-
-        // Velocity constraint: we want relative_velocity + impulse/effective_mass = 0
-        // impulse = -relative_velocity * effective_mass
-        let velocity_impulse = -relative_velocity * self.effective_mass;
-
-        // Combine position and velocity impulses
-        velocity_impulse + position_impulse
+        -(relative_velocity + self.bias) * self.effective_mass
     }
 
     /// Apply impulse to bodies

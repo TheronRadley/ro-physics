@@ -56,6 +56,7 @@ pub trait Constraint: fmt::Debug + Send + Sync {
 
 /// Base struct for all constraints
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct BaseConstraint {
     /// Handle to this constraint
     handle: ConstraintHandle,

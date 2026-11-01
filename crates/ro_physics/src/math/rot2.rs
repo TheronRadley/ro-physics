@@ -328,7 +328,7 @@ impl Eq for Rot2 {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::{PI_OVER_TWO, PI_OVER_FOUR};
+    use crate::constants::PI_OVER_TWO;
     use crate::math::utils::{approx_eq, approx_eq_eps};
 
     #[test]

@@ -275,7 +275,7 @@ impl Bvh {
         let node = &self.nodes[node_idx];
 
         // Check if AABBs overlap
-        if !node.aabb.overlaps(&aabb) {
+        if !node.aabb.overlaps(aabb) {
             return;
         }
 
@@ -403,7 +403,6 @@ impl fmt::Display for Bvh {
 #[inline]
 #[must_use]
 /// Read one component of a vector (0 -> x, anything else -> y)
-///
 /// `Vec2` does not implement `Index`, so spatial code has to go through this
 /// helper instead of indexing with a dynamic axis.
 #[inline]
