@@ -7,8 +7,6 @@ use ro_physics::prelude::*;
 
 /// Create a stress test scene
 pub fn create_stress_scene(world: &mut World) {
-    let gravity = Vec2::new(0.0, -9.81);
-
     // Create ground
     let ground = world.create_static_body(Transform::identity());
     let _ = world.add_box(ground, Vec2::new(50.0, 0.5), 0.0);
@@ -47,7 +45,7 @@ pub fn create_stress_scene(world: &mut World) {
     }
 
     // Add some circles on top
-    for i in 0..20 {
+    for _ in 0..20 {
         let x = -10.0 + rand::random::<f32>() * 20.0;
         let y = 20.0 + rand::random::<f32>() * 5.0;
         let body = world.create_dynamic_body(Transform::new(Vec2::new(x, y), Rot2::new(0.0)));

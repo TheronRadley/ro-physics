@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use super::{SequentialImpulseSolver, SolverConfig};
 use crate::bodies::{Body, BodyHandle};
 use crate::collision::ContactManifold;
-use crate::math::Vec2;
 
 /// Contact solver that resolves collisions between bodies.
 ///
@@ -81,6 +80,7 @@ impl Default for ContactSolver {
 mod tests {
     use super::*;
     use crate::bodies::BodyHandle;
+    use crate::math::Vec2;
 
     #[test]
     fn test_construction() {

@@ -322,10 +322,20 @@ impl World {
     }
 
     /// Get all body handles
+    ///
+    /// Handles come back in body-slot order, which is stable across runs and
+    /// across worlds built the same way: iterating the handle map directly
+    /// would leak its (randomly seeded) iteration order into everything that
+    /// walks the list, and that is enough to make two identical simulations
+    /// diverge.
     #[inline]
     #[must_use]
     pub fn body_handles(&self) -> Vec<BodyHandle> {
-        self.body_map.keys().copied().collect()
+        self.bodies
+            .iter()
+            .flatten()
+            .map(|body| body.handle())
+            .collect()
     }
 
     // ------------------------------------------------------------------
@@ -428,10 +438,16 @@ impl World {
     }
 
     /// Get all collider handles
+    ///
+    /// Like [`World::body_handles`], the order is the stable slot order.
     #[inline]
     #[must_use]
     pub fn collider_handles(&self) -> Vec<ColliderHandle> {
-        self.collider_map.keys().copied().collect()
+        self.colliders
+            .iter()
+            .flatten()
+            .map(|collider| collider.handle())
+            .collect()
     }
 
     /// Refresh the broad-phase entry of a collider
@@ -731,10 +747,16 @@ impl World {
     }
 
     /// Get all constraint handles
+    ///
+    /// Like [`World::body_handles`], the order is the stable slot order.
     #[inline]
     #[must_use]
     pub fn constraint_handles(&self) -> Vec<ConstraintHandle> {
-        self.constraint_map.keys().copied().collect()
+        self.constraints
+            .iter()
+            .flatten()
+            .map(|constraint| constraint.handle())
+            .collect()
     }
 
     // ------------------------------------------------------------------
@@ -1012,12 +1034,16 @@ impl World {
 
         if emit_events {
             // Pairs that disappeared since the last step have ended
-            let ended: Vec<(ColliderHandle, ColliderHandle)> = self
+            let mut ended: Vec<(ColliderHandle, ColliderHandle)> = self
                 .touching_pairs
                 .iter()
                 .filter(|pair| !touching.contains(pair))
                 .copied()
                 .collect();
+
+            // `touching_pairs` is a set, so sort before reporting: the event
+            // order should not change from run to run.
+            ended.sort_unstable_by_key(|(a, b)| (a.id, a.generation, b.id, b.generation));
 
             for (handle_a, handle_b) in ended {
                 self.events
@@ -1254,7 +1280,14 @@ impl World {
             return;
         }
 
-        let handles: Vec<ConstraintHandle> = self.constraint_map.keys().copied().collect();
+        // Solve in slot order so the result does not depend on the iteration
+        // order of `constraint_map`.
+        let handles: Vec<ConstraintHandle> = self
+            .constraints
+            .iter()
+            .flatten()
+            .map(|constraint| constraint.handle())
+            .collect();
 
         // Pre-solve (read-only access to the bodies)
         for handle in &handles {

@@ -126,68 +126,68 @@ impl DemoApp {
             winit::keyboard::KeyCode::Space => {
                 self.paused = !self.paused;
             }
-            winit::keyboard::KeyCode::R => {
+            winit::keyboard::KeyCode::KeyR => {
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::T => {
+            winit::keyboard::KeyCode::KeyT => {
                 self.single_step = true;
             }
-            winit::keyboard::KeyCode::Key1 => {
+            winit::keyboard::KeyCode::Digit1 => {
                 self.current_scene = 0;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key2 => {
+            winit::keyboard::KeyCode::Digit2 => {
                 self.current_scene = 1;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key3 => {
+            winit::keyboard::KeyCode::Digit3 => {
                 self.current_scene = 2;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key4 => {
+            winit::keyboard::KeyCode::Digit4 => {
                 self.current_scene = 3;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key5 => {
+            winit::keyboard::KeyCode::Digit5 => {
                 self.current_scene = 4;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key6 => {
+            winit::keyboard::KeyCode::Digit6 => {
                 self.current_scene = 5;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::Key7 => {
+            winit::keyboard::KeyCode::Digit7 => {
                 self.current_scene = 6;
                 self.load_current_scene();
             }
-            winit::keyboard::KeyCode::D => {
+            winit::keyboard::KeyCode::KeyD => {
                 self.debug_flags.show_aabbs = !self.debug_flags.show_aabbs;
             }
-            winit::keyboard::KeyCode::C => {
+            winit::keyboard::KeyCode::KeyC => {
                 self.debug_flags.show_colliders = !self.debug_flags.show_colliders;
             }
-            winit::keyboard::KeyCode::V => {
+            winit::keyboard::KeyCode::KeyV => {
                 self.debug_flags.show_velocities = !self.debug_flags.show_velocities;
             }
-            winit::keyboard::KeyCode::S => {
+            winit::keyboard::KeyCode::KeyS => {
                 self.debug_flags.show_sleeping = !self.debug_flags.show_sleeping;
             }
-            winit::keyboard::KeyCode::Plus => {
+            winit::keyboard::KeyCode::Equal | winit::keyboard::KeyCode::NumpadAdd => {
                 self.zoom *= 1.1;
             }
             winit::keyboard::KeyCode::Minus => {
                 self.zoom /= 1.1;
             }
-            winit::keyboard::KeyCode::Up => {
+            winit::keyboard::KeyCode::ArrowUp => {
                 self.camera_target.y += 0.5 / self.zoom;
             }
-            winit::keyboard::KeyCode::Down => {
+            winit::keyboard::KeyCode::ArrowDown => {
                 self.camera_target.y -= 0.5 / self.zoom;
             }
-            winit::keyboard::KeyCode::Left => {
+            winit::keyboard::KeyCode::ArrowLeft => {
                 self.camera_target.x -= 0.5 / self.zoom;
             }
-            winit::keyboard::KeyCode::Right => {
+            winit::keyboard::KeyCode::ArrowRight => {
                 self.camera_target.x += 0.5 / self.zoom;
             }
             winit::keyboard::KeyCode::Escape => {

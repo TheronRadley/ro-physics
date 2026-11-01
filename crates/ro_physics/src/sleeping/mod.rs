@@ -53,7 +53,7 @@ impl SleepingSystem {
     /// Set if a body is sleeping
     #[inline]
     pub fn set_sleeping(&mut self, handle: BodyHandle, sleeping: bool) {
-        let state = self.sleeping.entry(handle).or_insert_with(SleepState::new);
+        let state = self.sleeping.entry(handle).or_default();
         state.sleeping = sleeping;
         if !sleeping {
             state.sleep_timer = 0.0;
@@ -78,7 +78,7 @@ impl SleepingSystem {
         angular_velocity: f32,
         dt: f32,
     ) {
-        let state = self.sleeping.entry(handle).or_insert_with(SleepState::new);
+        let state = self.sleeping.entry(handle).or_default();
 
         // Check if the body is moving
         let speed_squared = linear_velocity.length_squared();

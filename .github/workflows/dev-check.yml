@@ -34,18 +34,19 @@ jobs:
         with:
           workspaces: ". -> target"
 
+      # Format in place so the build below sees the formatted tree, and publish
+      # the diff instead of committing it: a push from the default token does
+      # not start a new workflow run, so the formatted commit has to be made
+      # by a human (or a token that does).
       - name: Format
         run: |
+          mkdir -p /tmp/logs
           cargo fmt --all
-          if git diff --quiet; then
-            echo "formatting already clean"
+          git diff --binary > /tmp/logs/fmt.patch
+          if [ -s /tmp/logs/fmt.patch ]; then
+            echo "formatting changed $(git diff --name-only | wc -l) file(s)"
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "style: apply cargo fmt" --quiet
-            git pull --rebase --quiet origin "${GITHUB_REF_NAME}" || true
-            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "formatting push skipped"
+            echo "formatting already clean"
           fi
 
       - name: Build library

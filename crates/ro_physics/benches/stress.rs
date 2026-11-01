@@ -108,7 +108,7 @@ fn stress_constraints(c: &mut Criterion) {
                 let _ = world.add_circle(head, 0.3, 10.0);
 
                 // Connect with joint
-                world.create_revolute_joint(torso, head, Vec2::new(0.0, -0.3));
+                let _ = world.create_revolute_joint(torso, head, Vec2::new(0.0, -0.3));
             }
 
             b.iter(|| {
@@ -148,7 +148,7 @@ fn stress_polygons(c: &mut Criterion) {
                     let angle = std::f32::consts::TAU * (j as f32) / (n as f32);
                     vertices.push(Vec2::new(angle.cos() * 0.5, angle.sin() * 0.5));
                 }
-                world.add_polygon(body, vertices, 1.0);
+                let _ = world.add_polygon(body, vertices, 1.0);
             }
 
             b.iter(|| {
@@ -228,7 +228,7 @@ fn bench_collision(c: &mut Criterion) {
             let collider_b =
                 Collider::new(ColliderHandle::new(2, 0), BodyHandle::new(2, 0), shape_b);
 
-            let transform_a = Transform::identity();
+            let transform_a = Transform::new(pos_a, Rot2::identity());
             let transform_b = Transform::new(pos_b, Rot2::identity());
 
             let narrow_phase = NarrowPhase::new(NarrowPhaseConfig::default());
@@ -257,7 +257,7 @@ fn bench_collision(c: &mut Criterion) {
             let collider_b =
                 Collider::new(ColliderHandle::new(2, 0), BodyHandle::new(2, 0), shape_b);
 
-            let transform_a = Transform::identity();
+            let transform_a = Transform::new(pos_a, Rot2::identity());
             let transform_b = Transform::new(pos_b, Rot2::identity());
 
             let narrow_phase = NarrowPhase::new(NarrowPhaseConfig::default());
@@ -292,7 +292,7 @@ fn bench_collision(c: &mut Criterion) {
             let collider_b =
                 Collider::new(ColliderHandle::new(2, 0), BodyHandle::new(2, 0), shape_b);
 
-            let transform_a = Transform::identity();
+            let transform_a = Transform::new(pos_a, Rot2::identity());
             let transform_b = Transform::new(pos_b, Rot2::identity());
 
             let narrow_phase = NarrowPhase::new(NarrowPhaseConfig::default());
