@@ -20,14 +20,30 @@ pub mod utils {
     /// Check if two floating-point values are approximately equal
     #[inline]
     #[must_use]
-    pub fn approx_eq(a: f32, b: f32, epsilon: f32 = EPSILON) -> bool {
+    pub fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= EPSILON
+    }
+
+    /// Check if two floating-point values are equal within an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
         (a - b).abs() <= epsilon
     }
 
     /// Check if a value is approximately zero
+    ///
+    /// Uses [`EPSILON`][crate::constants::EPSILON] as the tolerance.
     #[inline]
     #[must_use]
-    pub fn approx_zero(a: f32, epsilon: f32 = EPSILON) -> bool {
+    pub fn approx_zero(a: f32) -> bool {
+        a.abs() <= EPSILON
+    }
+
+    /// Check if a value is zero within an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn approx_zero_eps(a: f32, epsilon: f32) -> bool {
         a.abs() <= epsilon
     }
 

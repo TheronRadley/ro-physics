@@ -5,10 +5,9 @@
 
 use std::fmt;
 
-use crate::constants::EPSILON;
 use crate::geometry::Aabb;
 use crate::math::Vec2;
-use crate::shapes::{MassProperties, ShapeType};
+use crate::shapes::{MassProperties, ShapeError, ShapeType};
 
 /// A circle shape.
 ///
@@ -22,19 +21,33 @@ pub struct Circle {
 }
 
 impl Circle {
+    /// Create a new circle with the given radius, validating the radius.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShapeError::InvalidRadius`] if the radius is negative,
+    /// non-finite or outside the supported coordinate range.
+    pub fn try_new(radius: f32) -> Result<Self, ShapeError> {
+        if !radius.is_finite() || radius < 0.0 || radius >= crate::constants::MAX_FLOAT {
+            return Err(ShapeError::InvalidRadius(radius));
+        }
+
+        Ok(Self { radius })
+    }
+
     /// Create a new circle with the given radius
     ///
     /// # Panics
     ///
-    /// Panics if radius is negative.
+    /// Panics if the radius is negative, non-finite or out of range. Use
+    /// [`Circle::try_new`] for untrusted input.
     #[inline]
     #[must_use]
     pub fn new(radius: f32) -> Self {
-        debug_assert!(
-            radius >= 0.0,
-            "Circle radius must be non-negative"
-        );
-        Self { radius }
+        match Self::try_new(radius) {
+            Ok(circle) => circle,
+            Err(error) => panic!("invalid circle: {error}"),
+        }
     }
 
     /// Get the radius
@@ -284,17 +297,32 @@ mod tests {
         assert!(circle2.is_valid());
         assert!(circle2.validate());
 
-        let circle3 = Circle::new(f32::NAN);
+        // Invalid radii are rejected by `try_new`; `is_valid`/`validate` still
+        // report them as invalid for circles built by other means.
+        assert!(Circle::try_new(f32::NAN).is_err());
+        assert!(Circle::try_new(f32::INFINITY).is_err());
+        assert_eq!(Circle::try_new(-1.0), Err(ShapeError::InvalidRadius(-1.0)));
+        assert!(Circle::try_new(1e30).is_err());
+
+        let circle3 = Circle { radius: f32::NAN };
         assert!(!circle3.is_valid());
         assert!(!circle3.validate());
 
-        let circle4 = Circle::new(f32::INFINITY);
+        let circle4 = Circle { radius: f32::INFINITY };
         assert!(!circle4.is_valid());
         assert!(!circle4.validate());
 
-        let circle5 = Circle::new(1e30);
-        assert!(circle5.is_valid());
+        let circle5 = Circle { radius: 1e30 };
+        assert!(!circle5.is_valid());
         assert!(!circle5.validate());
+    }
+
+    #[test]
+    fn test_try_new() {
+        assert_eq!(Circle::try_new(2.0).unwrap().radius(), 2.0);
+        assert!(Circle::try_new(0.0).is_ok());
+        assert!(Circle::try_new(-0.5).is_err());
+        assert!(Circle::try_new(f32::NAN).is_err());
     }
 
     #[test]

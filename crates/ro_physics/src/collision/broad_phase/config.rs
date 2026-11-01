@@ -95,7 +95,11 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
+    }
+
+    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
         (a - b).abs() <= epsilon
     }
 }

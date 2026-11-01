@@ -116,7 +116,7 @@ impl Shape {
     /// Calculate the AABB for the shape at a given transform
     #[inline]
     #[must_use]
-    pub fn aabb(self, transform: Transform) -> Aabb {
+    pub fn aabb(&self, transform: Transform) -> Aabb {
         match self {
             Shape::Circle(c) => c.aabb(transform.position),
             Shape::Polygon(p) => p.aabb(transform),
@@ -142,9 +142,9 @@ impl Shape {
     pub fn closest_point(&self, point: Vec2, transform: Transform) -> Vec2 {
         match self {
             Shape::Circle(c) => {
-                let local_point = point - transform.position;
-                let closest_local = c.closest_point(point, transform.position);
-                transform.transform_point(closest_local)
+                // A circle is symmetric about its centre, so the closest point
+                // can be computed directly in world space.
+                c.closest_point(point, transform.position)
             }
             Shape::Polygon(p) => {
                 let local_point = transform.inverse_transform_point(point);
@@ -300,9 +300,9 @@ impl ShapeTrait for Circle {
     }
 
     fn closest_point(&self, point: Vec2, transform: Transform) -> Vec2 {
-        let local_point = point - transform.position;
-        let closest_local = self.closest_point(point, transform.position);
-        transform.transform_point(closest_local)
+        // A circle is centred on the transform origin, so the closest point is
+        // already expressed in world space.
+        self.closest_point(point, transform.position)
     }
 
     fn mass_properties(&self, density: f32) -> MassProperties {
@@ -530,7 +530,11 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
+    }
+
+    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
         (a - b).abs() <= epsilon
     }
 }

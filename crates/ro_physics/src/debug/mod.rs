@@ -3,7 +3,7 @@
 //! This module provides debugging and visualization tools for the physics simulation.
 
 use crate::bodies::BodyHandle;
-use crate::collision::{ColliderHandle, ContactManifold};
+use crate::collision::ColliderHandle;
 use crate::geometry::Aabb;
 use crate::math::{Transform, Vec2};
 

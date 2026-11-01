@@ -3,7 +3,6 @@
 use super::*;
 use crate::bodies::BodyHandle;
 use crate::collision::ColliderHandle;
-use crate::math::Rot2;
 use crate::shapes::{Circle, Polygon, Shape};
 
 #[cfg(test)]

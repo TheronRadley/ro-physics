@@ -26,7 +26,7 @@ pub mod utils {
     #[inline]
     #[must_use]
     pub fn can_collide(collider1: &Collider, collider2: &Collider) -> bool {
-        collider1.filter.can_collide_with(&collider2.filter)
+        collider1.filter().can_collide_with(&collider2.filter())
     }
 
     /// Calculate the relative velocity between two bodies at a contact point

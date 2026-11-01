@@ -17,6 +17,7 @@ use crate::math::{utils::approx_eq, Vec2};
 /// - Bounding volume hierarchy
 ///
 /// The AABB is defined by its minimum and maximum corners.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Aabb {
@@ -31,13 +32,18 @@ impl Aabb {
     ///
     /// # Panics
     ///
-    /// Panics if min > max in any dimension.
+    /// Panics if min > max in any dimension, or if either corner is
+    /// non-finite.
     #[inline]
     #[must_use]
     pub fn new(min: Vec2, max: Vec2) -> Self {
-        debug_assert!(
+        assert!(
             min.x <= max.x && min.y <= max.y,
             "AABB min must be <= max"
+        );
+        assert!(
+            min.is_finite() && max.is_finite(),
+            "AABB corners must be finite"
         );
         Self { min, max }
     }
@@ -143,7 +149,14 @@ impl Aabb {
     /// Check if the AABB has zero area
     #[inline]
     #[must_use]
-    pub fn is_degenerate(self, epsilon: f32 = EPSILON) -> bool {
+    pub fn is_degenerate(self) -> bool {
+        self.is_degenerate_eps(EPSILON)
+    }
+
+    /// Check if the AABB has zero area within an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn is_degenerate_eps(self, epsilon: f32) -> bool {
         self.width() <= epsilon || self.height() <= epsilon
     }
 
@@ -199,10 +212,19 @@ impl Aabb {
     #[inline]
     #[must_use]
     pub fn union(self, other: Self) -> Self {
-        Self::new(
-            Vec2::new(self.min.x.min(other.min.x), self.min.y.min(other.min.y)),
-            Vec2::new(self.max.x.max(other.max.x), self.max.y.max(other.max.y)),
-        )
+        // Unions are used by the spatial structures to accumulate bounds, so
+        // they must never panic: invalid (empty) operands are simply ignored.
+        if !self.is_valid() {
+            return other;
+        }
+        if !other.is_valid() {
+            return self;
+        }
+
+        Self {
+            min: Vec2::new(self.min.x.min(other.min.x), self.min.y.min(other.min.y)),
+            max: Vec2::new(self.max.x.max(other.max.x), self.max.y.max(other.max.y)),
+        }
     }
 
     /// Expand the AABB to include a point
@@ -305,7 +327,10 @@ impl Aabb {
     ) -> Option<f32> {
         use crate::math::utils::safe_divide;
 
-        let inv_dir = Vec2::new(1.0 / direction.x, 1.0 / direction.y);
+        let inv_dir = Vec2::new(
+            safe_divide(1.0, direction.x),
+            safe_divide(1.0, direction.y),
+        );
         
         let mut t_min = 0.0;
         let mut t_max = max_fraction;
@@ -599,7 +624,7 @@ mod tests {
         assert_eq!(aabb.distance_to_point(Vec2::new(5.0, 5.0)), 0.0);
         
         // Point outside
-        assert!(approx_eq(aabb.distance_to_point(Vec2::new(15.0, 15.0)), 5.0 * 2.0.f32.sqrt(), 1e-5));
+        assert!(approx_eq_eps(aabb.distance_to_point(Vec2::new(15.0, 15.0)), 5.0 * 2.0.f32.sqrt(), 1e-5));
         
         // Point at edge
         assert!(approx_eq(aabb.distance_to_point(Vec2::new(10.0, 5.0)), 0.0));
@@ -612,12 +637,12 @@ mod tests {
         // Ray from outside, hitting the AABB
         let hit = aabb.ray_cast(Vec2::new(-5.0, 5.0), Vec2::new(1.0, 0.0), 100.0);
         assert!(hit.is_some());
-        assert!(approx_eq(hit.unwrap(), 5.0, 1e-5));
+        assert!(approx_eq_eps(hit.unwrap(), 5.0, 1e-5));
         
         // Ray from inside
         let hit2 = aabb.ray_cast(Vec2::new(5.0, 5.0), Vec2::new(1.0, 0.0), 100.0);
         assert!(hit2.is_some());
-        assert!(approx_eq(hit2.unwrap(), 0.0, 1e-5));
+        assert!(approx_eq_eps(hit2.unwrap(), 0.0, 1e-5));
         
         // Ray missing the AABB
         let hit3 = aabb.ray_cast(Vec2::new(-5.0, 15.0), Vec2::new(1.0, 0.0), 100.0);

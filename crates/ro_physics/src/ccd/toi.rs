@@ -6,8 +6,8 @@
 use std::fmt;
 
 use crate::constants::EPSILON;
-use crate::math::Vec2;
-use crate::shapes::{Circle, Polygon, Shape};
+use crate::math::{Rot2, Transform, Vec2};
+use crate::shapes::{Circle, Polygon};
 use crate::geometry::Aabb;
 
 /// Result of a time of impact calculation.
@@ -437,10 +437,11 @@ impl TimeOfImpact {
         let current_pos_b = position_b + velocity_b * toi;
         let current_rotation_b = rotation_b + angular_velocity_b * toi;
         
-        let closest_point = polygon.closest_point_to(
-            current_pos_a - current_pos_b,
-            current_rotation_b
-        ) + current_pos_b;
+        // Work in the polygon's local frame (polygon centred on the origin
+        // and axis aligned), then transform the result back to world space.
+        let local_point = (current_pos_a - current_pos_b).rotate(-current_rotation_b);
+        let closest_point = polygon.closest_point(local_point).rotate(current_rotation_b)
+            + current_pos_b;
         
         let delta = closest_point - current_pos_a;
         let distance = delta.length();
@@ -485,8 +486,14 @@ impl TimeOfImpact {
             let current_pos_a = position_a + velocity_a * toi;
             let current_pos_b = position_b + velocity_b * toi;
             
-            let aabb_a = polygon_a.aabb(current_pos_a, rotation_a + angular_velocity_a * toi);
-            let aabb_b = polygon_b.aabb(current_pos_b, rotation_b + angular_velocity_b * toi);
+            let aabb_a = polygon_a.aabb(Transform::new(
+                current_pos_a,
+                Rot2::new(rotation_a + angular_velocity_a * toi),
+            ));
+            let aabb_b = polygon_b.aabb(Transform::new(
+                current_pos_b,
+                Rot2::new(rotation_b + angular_velocity_b * toi),
+            ));
             
             let distance = Self::aabb_distance(&aabb_a, &aabb_b);
             
@@ -537,7 +544,7 @@ impl TimeOfImpact {
         let local_point_rotated = local_point.rotate(-rotation_b);
         
         // Find closest point on polygon
-        let closest = polygon.closest_point_to(local_point_rotated, 0.0);
+        let closest = polygon.closest_point(local_point_rotated);
         
         // Check distance
         let delta = local_point_rotated - closest;
@@ -557,16 +564,16 @@ impl TimeOfImpact {
         // Use a simple AABB check for now
         // Full SAT implementation would be more accurate but slower
         
-        let aabb_a = polygon_a.aabb(position_a, rotation_a);
-        let aabb_b = polygon_b.aabb(position_b, rotation_b);
-        
-        aabb_a.overlaps(&aabb_b)
+        let aabb_a = polygon_a.aabb(Transform::new(position_a, Rot2::new(rotation_a)));
+        let aabb_b = polygon_b.aabb(Transform::new(position_b, Rot2::new(rotation_b)));
+
+        aabb_a.overlaps(aabb_b)
     }
 }
 
 impl Default for TimeOfImpact {
     fn default() -> Self {
-        Self::new()
+        Self
     }
 }
 

@@ -1,24 +1,25 @@
-//! Circle-polygon collision detection using SAT and closest point methods.
+//! Circle-polygon collision detection.
 //!
-//! This module provides robust collision detection between circles and convex polygons.
-//! The algorithm finds the closest point on the polygon to the circle center and
-//! checks for overlap.
+//! The algorithm works in the polygon's local space:
+//!
+//! 1. transform the circle centre into polygon local space,
+//! 2. handle the "centre inside the polygon" case separately, because there
+//!    the closest feature is a face and the centre has to be pushed *out*,
+//! 3. otherwise use the closest feature (vertex or face) of the polygon.
+//!
+//! The generated manifold is expressed for the pair (circle = A,
+//! polygon = B), so the normal points **from the circle towards the polygon**
+//! and the impulse pushes the circle along `-normal`, i.e. out of the polygon.
 
 use crate::constants::EPSILON;
-use crate::math::{Rot2, Transform, Vec2};
+use crate::math::{Transform, Vec2};
 use crate::shapes::{Circle, Polygon};
 use super::NarrowPhaseConfig;
 use super::super::{ContactId, ContactManifold};
 
-/// Detect collision between a circle and a polygon.
+/// Detect collision between a circle (A) and a polygon (B).
 ///
-/// Uses a hybrid approach:
-/// 1. Transform circle center to polygon local space
-/// 2. Find closest point on polygon to circle center
-/// 3. Check if distance < circle radius
-/// 4. Generate contact manifold with proper normal and penetration
-///
-/// Returns a contact manifold if they overlap, None otherwise.
+/// Returns a contact manifold if they overlap, `None` otherwise.
 #[inline]
 #[must_use]
 pub fn circle_polygon_collision(
@@ -26,479 +27,364 @@ pub fn circle_polygon_collision(
     transform_circle: Transform,
     polygon: &Polygon,
     transform_polygon: Transform,
-    config: &NarrowPhaseConfig,
+    _config: &NarrowPhaseConfig,
 ) -> Option<ContactManifold> {
-    // Transform circle center to polygon local space
-    let circle_center_local = transform_polygon
-        .inverse_transform_point(transform_circle.position);
-    
-    // Find the closest point on the polygon to the circle center
-    let (closest_point_local, closest_feature) = 
-        find_closest_point_on_polygon(polygon, circle_center_local);
-    
-    // Calculate vector from closest point to circle center
-    let to_circle = circle_center_local - closest_point_local;
-    let distance_squared = to_circle.length_squared();
-    
-    // Check if circle center is inside the polygon
-    let circle_inside = polygon.contains_point(circle_center_local);
-    
-    // If circle center is inside polygon, we need special handling
-    if circle_inside {
-        // Find the closest edge and use its normal
-        let (edge_normal, penetration) = find_closest_edge_penetration(
-            polygon, circle_center_local, circle.radius
-        );
-        
-        // Transform back to world space
-        let edge_normal_world = transform_polygon.rotation.rotate(edge_normal);
-        let closest_point_world = transform_polygon.transform_point(closest_point_local);
-        let contact_point_world = closest_point_world + edge_normal_world * (circle.radius - penetration);
-        
-        let mut manifold = ContactManifold::new();
-        manifold.add_contact(
-            contact_point_world,
-            edge_normal_world,
-            penetration,
-            0.0,
-            0.0,
-            ContactId::new(closest_feature, 0),
-        );
-        
-        return Some(manifold);
-    }
-    
-    // Check for separation
-    let distance = distance_squared.sqrt();
-    if distance > circle.radius {
+    if polygon.vertex_count() < 3 {
         return None;
     }
-    
-    // Calculate penetration depth
-    let penetration = circle.radius - distance;
-    
-    // Handle near-zero distance (circle center very close to polygon)
-    let normal_local = if distance > EPSILON {
-        to_circle / distance
-    } else {
-        // Use the closest edge normal as fallback
-        find_normal_from_polygon(polygon, closest_point_local)
-    };
-    
-    // Transform normal to world space
-    let normal_world = transform_polygon.rotation.rotate(normal_local);
-    
-    // Calculate contact point in world space
-    // Contact point is on the polygon surface
-    let closest_point_world = transform_polygon.transform_point(closest_point_local);
-    let contact_point_world = closest_point_world + normal_world * (penetration - circle.radius);
-    
-    // Create contact manifold
+
+    let radius = circle.radius();
+
+    // Transform the circle centre into polygon local space
+    let center_local = transform_polygon.inverse_transform_point(transform_circle.position);
+
+    let vertices = polygon.vertices();
+    let normals = polygon.normals();
+    let count = vertices.len();
+
+    let (normal_local, penetration, contact_local, feature) =
+        if polygon.contains_point(center_local) {
+            inside_contact(center_local, radius, vertices, normals)?
+        } else {
+            outside_contact(center_local, radius, vertices, normals, count)?
+        };
+
+    // Transform back into world space. The normal is a direction, so only the
+    // rotation of the polygon applies.
+    let normal_world = transform_polygon.transform_vector(normal_local);
+    let contact_world = transform_polygon.transform_point(contact_local);
+
     let mut manifold = ContactManifold::new();
     manifold.add_contact(
-        contact_point_world,
+        contact_world,
         normal_world,
         penetration,
         0.0,
         0.0,
-        ContactId::new(closest_feature, 0),
+        ContactId::new(0, feature),
     );
-    
-    // Check if we need a second contact point (for shallow penetration)
-    if config.precise && penetration < config.collision_margin {
-        // Try to find a second contact point
-        if let Some(second_contact) = find_second_contact(
-            circle,
-            transform_circle,
-            polygon,
-            transform_polygon,
-            &manifold,
-            config,
-        ) {
-            manifold.add_contact(
-                second_contact.position,
-                second_contact.normal,
-                second_contact.penetration,
-                0.0,
-                0.0,
-                ContactId::new(second_contact.contact_id.0, second_contact.contact_id.1),
-            );
-        }
-    }
-    
+
     Some(manifold)
 }
 
-/// Find the closest point on a polygon to a given point.
+/// Contact data for a circle centre that lies inside the polygon.
 ///
-/// Returns the closest point and the feature index (vertex or edge).
-fn find_closest_point_on_polygon(polygon: &Polygon, point: Vec2) -> (Vec2, u32) {
-    let vertices = polygon.vertices();
-    let n = vertices.len();
-    
-    let mut closest_point = vertices[0];
-    let mut min_dist_sq = f32::INFINITY;
-    let mut closest_feature = 0u32;
-    
-    // Check all vertices
-    for (i, &vertex) in vertices.iter().enumerate() {
-        let delta = point - vertex;
-        let dist_sq = delta.length_squared();
-        
-        if dist_sq < min_dist_sq {
-            min_dist_sq = dist_sq;
-            closest_point = vertex;
-            closest_feature = i as u32;
-        }
-    }
-    
-    // Check all edges
-    for i in 0..n {
-        let v1 = vertices[i];
-        let v2 = vertices[(i + 1) % n];
-        
-        let edge = v2 - v1;
-        let to_point = point - v1;
-        
-        // Project point onto edge
-        let t = to_point.dot(edge) / edge.length_squared();
-        let t_clamped = t.clamp(0.0, 1.0);
-        
-        let projection = v1 + edge * t_clamped;
-        let delta = point - projection;
-        let dist_sq = delta.length_squared();
-        
-        if dist_sq < min_dist_sq {
-            min_dist_sq = dist_sq;
-            closest_point = projection;
-            // Feature is the edge index (offset by vertex count)
-            closest_feature = (n + i) as u32;
-        }
-    }
-    
-    (closest_point, closest_feature)
-}
-
-/// Find the closest edge and penetration when circle is inside polygon.
-fn find_closest_edge_penetration(
-    polygon: &Polygon,
-    point: Vec2,
+/// Returns `(normal_local, penetration, contact_local, feature)`.
+fn inside_contact(
+    center_local: Vec2,
     radius: f32,
-) -> (Vec2, f32) {
-    let vertices = polygon.vertices();
-    let normals = polygon.normals();
-    let n = vertices.len();
-    
-    let mut min_penetration = f32::INFINITY;
-    let mut best_normal = Vec2::zero();
-    
-    // For each edge, calculate how far we need to move to escape
-    for i in 0..n {
-        let v1 = vertices[i];
-        let normal = normals[i];
-        
-        // Distance from point to edge (signed)
-        let to_v1 = point - v1;
-        let distance = to_v1.dot(normal);
-        
-        // Penetration = radius + distance (since point is inside, distance is negative)
-        let penetration = radius + distance;
-        
-        if penetration < min_penetration {
-            min_penetration = penetration;
-            best_normal = normal;
+    vertices: &[Vec2],
+    normals: &[Vec2],
+) -> Option<(Vec2, f32, Vec2, u32)> {
+    let mut best_index = 0usize;
+    let mut best_separation = f32::NEG_INFINITY;
+
+    for (index, normal) in normals.iter().enumerate() {
+        // Signed distance of the centre from the face plane; negative inside.
+        let separation = normal.dot(center_local - vertices[index]);
+        if separation > best_separation {
+            best_separation = separation;
+            best_index = index;
         }
     }
-    
-    (best_normal, min_penetration)
-}
 
-/// Find a normal from the polygon for a point very close to the surface.
-fn find_normal_from_polygon(polygon: &Polygon, point: Vec2) -> Vec2 {
-    let vertices = polygon.vertices();
-    let normals = polygon.normals();
-    let n = vertices.len();
-    
-    // Find the closest edge
-    let mut closest_edge = 0;
-    let mut min_dist = f32::INFINITY;
-    
-    for i in 0..n {
-        let v1 = vertices[i];
-        let v2 = vertices[(i + 1) % n];
-        
-        let dist = distance_point_to_edge(point, v1, v2);
-        if dist < min_dist {
-            min_dist = dist;
-            closest_edge = i;
-        }
+    // The centre is inside, so `best_separation` is negative: the magnitude is
+    // the depth of the centre below the nearest face. The circle overlaps the
+    // polygon by `radius + depth`.
+    let depth = -best_separation;
+    let penetration = radius + depth;
+
+    if !(penetration > 0.0) {
+        return None;
     }
-    
-    normals[closest_edge]
+
+    let outward = normals[best_index];
+
+    // Contact point: the centre projected onto the nearest face.
+    let contact_local = center_local - outward * best_separation;
+
+    // The circle leaves the polygon along the outward normal, so the manifold
+    // normal (A -> B, i.e. circle -> polygon) points the other way.
+    let normal_local = -outward;
+
+    Some((normal_local, penetration, contact_local, best_index as u32))
 }
 
-/// Calculate distance from point to edge.
-fn distance_point_to_edge(point: Vec2, v1: Vec2, v2: Vec2) -> f32 {
-    let edge = v2 - v1;
-    let to_point = point - v1;
-    
-    let t = to_point.dot(edge) / edge.length_squared();
-    let t_clamped = t.clamp(0.0, 1.0);
-    
-    let projection = v1 + edge * t_clamped;
-    (point - projection).length()
+/// Contact data for a circle centre that lies outside the polygon.
+fn outside_contact(
+    center_local: Vec2,
+    radius: f32,
+    vertices: &[Vec2],
+    normals: &[Vec2],
+    count: usize,
+) -> Option<(Vec2, f32, Vec2, u32)> {
+    let (closest_local, feature) = closest_feature(center_local, vertices, count);
+
+    let to_center = center_local - closest_local;
+    let distance = to_center.length();
+
+    if distance > radius {
+        return None;
+    }
+
+    let outward = if distance > EPSILON {
+        to_center / distance
+    } else {
+        // The centre sits exactly on the boundary: fall back to the normal of
+        // the closest face.
+        let fallback = feature.min(count as u32 - 1) as usize;
+        normals[fallback]
+    };
+
+    // Normal points from the polygon towards the circle (B -> A), the manifold
+    // normal points from A to B.
+    let normal_local = -outward;
+
+    Some((normal_local, radius - distance, closest_local, feature))
 }
 
-/// Attempt to find a second contact point for shallow penetration.
+/// Find the closest point on the polygon boundary and its feature index.
 ///
-/// This improves stability for near-flat contacts.
-fn find_second_contact(
-    circle: &Circle,
-    transform_circle: Transform,
-    polygon: &Polygon,
-    transform_polygon: Transform,
-    existing_manifold: &ContactManifold,
-    config: &NarrowPhaseConfig,
-) -> Option<Contact> {
-    use super::super::Contact;
-    
-    // Transform circle to polygon local space
-    let circle_center_local = transform_polygon
-        .inverse_transform_point(transform_circle.position);
-    
-    let vertices = polygon.vertices();
-    let normals = polygon.normals();
-    let n = vertices.len();
-    
-    let mut best_contact: Option<Contact> = None;
-    let mut best_separation = f32::INFINITY;
-    
-    // Check all edges for potential second contact
-    for i in 0..n {
-        let v1 = vertices[i];
-        let v2 = vertices[(i + 1) % n];
-        let edge = v2 - v1;
-        let normal = normals[i];
-        
-        // Project circle center onto edge
-        let to_v1 = circle_center_local - v1;
-        let t = to_v1.dot(edge) / edge.length_squared();
-        
-        // Only consider points on the edge segment
-        if t < 0.0 || t > 1.0 {
-            continue;
-        }
-        
-        let projection = v1 + edge * t;
-        let to_projection = circle_center_local - projection;
-        let distance = to_projection.length();
-        
-        // Check if this could be a valid second contact
-        if distance < circle.radius {
-            let penetration = circle.radius - distance;
-            
-            // Check if this contact is significantly different from the first
-            if let Some(existing) = existing_manifold.contacts().first() {
-                let existing_local = transform_polygon
-                    .inverse_transform_point(existing.position);
-                let delta = projection - existing_local;
-                
-                // Only add if contacts are separated
-                if delta.length_squared() > config.contact_tolerance * config.contact_tolerance {
-                    let separation = -penetration; // More negative = better candidate
-                    
-                    if separation < best_separation {
-                        best_separation = separation;
-                        
-                        let normal_world = transform_polygon.rotation.rotate(normal);
-                        let projection_world = transform_polygon.transform_point(projection);
-                        let contact_point_world = projection_world + normal_world * (penetration - circle.radius);
-                        
-                        best_contact = Some(Contact::new(
-                            contact_point_world,
-                            normal_world,
-                            penetration,
-                            0.0,
-                            0.0,
-                            ContactId::new(i as u32, 1),
-                        ));
-                    }
-                }
-            }
+/// Feature indices below `count` refer to vertices, indices `count..2*count`
+/// refer to faces.
+fn closest_feature(point: Vec2, vertices: &[Vec2], count: usize) -> (Vec2, u32) {
+    let mut closest = vertices[0];
+    let mut min_distance_sq = (point - vertices[0]).length_squared();
+    let mut feature = 0u32;
+
+    for (index, &vertex) in vertices.iter().enumerate() {
+        let distance_sq = (point - vertex).length_squared();
+        if distance_sq < min_distance_sq {
+            min_distance_sq = distance_sq;
+            closest = vertex;
+            feature = index as u32;
         }
     }
-    
-    best_contact
+
+    for index in 0..count {
+        let v1 = vertices[index];
+        let v2 = vertices[(index + 1) % count];
+
+        let edge = v2 - v1;
+        let edge_length_sq = edge.length_squared();
+
+        let t = if edge_length_sq > EPSILON * EPSILON {
+            ((point - v1).dot(edge) / edge_length_sq).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        let projection = v1 + edge * t;
+        let distance_sq = (point - projection).length_squared();
+
+        if distance_sq < min_distance_sq {
+            min_distance_sq = distance_sq;
+            closest = projection;
+            feature = (count + index) as u32;
+        }
+    }
+
+    (closest, feature)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::utils::approx_eq;
+    use crate::math::Rot2;
 
-    #[test]
-    fn test_circle_outside_polygon() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-5
+    }
 
-        let transform_circle = Transform::from_translation(Vec2::new(5.0, 0.0));
-        let transform_polygon = Transform::identity();
-
-        let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
-
-        assert!(result.is_none(), "Circle outside polygon should not collide");
+    /// A 2x2 box centred on the origin.
+    fn box_polygon() -> Polygon {
+        Polygon::from_rectangle(2.0, 2.0)
     }
 
     #[test]
-    fn test_circle_touching_polygon() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        // Place circle touching the polygon edge (at x=2.0, which is the right edge)
-        let transform_circle = Transform::from_translation(Vec2::new(2.0, 0.0));
-        let transform_polygon = Transform::identity();
-
+    fn test_circle_resting_on_top_of_box() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
         let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
 
-        assert!(result.is_some(), "Touching circle should collide");
-        let manifold = result.unwrap();
-        assert!(manifold.contact_count() >= 1);
-        
+        // Circle centre 0.25 above the top face (y = 1)
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.0, 1.25)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .expect("expected a contact");
+
         let contact = manifold.contact(0);
-        assert!(approx_eq(contact.penetration, 0.0, 1e-5), 
-                "Penetration should be ~0 at touching point");
+        // The normal points from the circle down into the box
+        assert!(approx_eq(contact.normal().x, 0.0));
+        assert!(approx_eq(contact.normal().y, -1.0));
+        assert!(approx_eq(contact.penetration(), 0.25));
+        // Contact point sits on the top face
+        assert!(approx_eq(contact.position().y, 1.0));
     }
 
     #[test]
-    fn test_circle_overlapping_polygon() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        // Place circle overlapping the polygon
-        let transform_circle = Transform::from_translation(Vec2::new(1.5, 0.0));
-        let transform_polygon = Transform::identity();
-
+    fn test_circle_below_box() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
         let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
 
-        assert!(result.is_some(), "Overlapping circle should collide");
-        let manifold = result.unwrap();
-        assert!(manifold.contact_count() >= 1);
-        
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.0, -1.25)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .expect("expected a contact");
+
         let contact = manifold.contact(0);
-        assert!(contact.penetration > 0.0, "Penetration should be positive");
+        // Normal points from the circle up into the box
+        assert!(approx_eq(contact.normal().y, 1.0));
+        assert!(approx_eq(contact.penetration(), 0.25));
     }
 
     #[test]
-    fn test_circle_inside_polygon() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(10.0, 10.0);
-
-        // Place circle inside the polygon
-        let transform_circle = Transform::identity();
-        let transform_polygon = Transform::identity();
-
+    fn test_circle_near_corner() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
         let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
 
-        assert!(result.is_some(), "Circle inside polygon should collide");
-        let manifold = result.unwrap();
-        assert!(manifold.contact_count() >= 1);
-    }
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(1.25, 1.25)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .expect("expected a contact");
 
-    #[test]
-    fn test_circle_vs_rotated_box() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        // Rotate the box by 45 degrees
-        let transform_circle = Transform::from_translation(Vec2::new(2.0, 0.0));
-        let transform_polygon = Transform::new(
-            Vec2::new(0.0, 0.0),
-            Rot2::new(crate::constants::PI_OVER_FOUR)
-        );
-
-        let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
-
-        assert!(result.is_some(), "Circle should collide with rotated box");
-    }
-
-    #[test]
-    fn test_circle_vs_triangle() {
-        let circle = Circle::new(1.0);
-        let triangle = Polygon::new(vec![
-            Vec2::new(-1.0, -1.0),
-            Vec2::new(1.0, -1.0),
-            Vec2::new(0.0, 1.0),
-        ]);
-
-        let transform_circle = Transform::from_translation(Vec2::new(0.0, 0.5));
-        let transform_polygon = Transform::identity();
-
-        let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &triangle, transform_polygon, &config
-        );
-
-        assert!(result.is_some(), "Circle should collide with triangle");
-    }
-
-    #[test]
-    fn test_contact_normal_direction() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        // Circle to the right of polygon, normal should point left (toward circle)
-        let transform_circle = Transform::from_translation(Vec2::new(2.5, 0.0));
-        let transform_polygon = Transform::identity();
-
-        let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
-        );
-
-        assert!(result.is_some());
-        let manifold = result.unwrap();
         let contact = manifold.contact(0);
-        
-        // Normal should point from polygon to circle (rightward)
-        assert!(contact.normal.x > 0.0, "Normal should point toward circle");
+        // The closest feature is the corner (1, 1)
+        assert!(approx_eq(contact.position().x, 1.0));
+        assert!(approx_eq(contact.position().y, 1.0));
+        // Normal points from the circle towards the corner
+        let expected = Vec2::new(-1.0, -1.0).normalize();
+        assert!(approx_eq(contact.normal().x, expected.x));
+        assert!(approx_eq(contact.normal().y, expected.y));
     }
 
     #[test]
-    fn test_penetration_depth() {
-        let circle = Circle::new(1.0);
-        let polygon = Polygon::from_rectangle(2.0, 2.0);
-
-        // Circle center at (1.5, 0), polygon from (-1,-1) to (1,1)
-        // Distance from circle center to polygon edge at x=1 is 0.5
-        // Penetration should be 1.0 - 0.5 = 0.5
-        let transform_circle = Transform::from_translation(Vec2::new(1.5, 0.0));
-        let transform_polygon = Transform::identity();
-
+    fn test_circle_separated() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
         let config = NarrowPhaseConfig::default();
-        let result = circle_polygon_collision(
-            &circle, transform_circle, &polygon, transform_polygon, &config
+
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.0, 3.0)),
+            &polygon,
+            Transform::identity(),
+            &config,
         );
 
-        assert!(result.is_some());
-        let manifold = result.unwrap();
+        assert!(manifold.is_none());
+    }
+
+    #[test]
+    fn test_circle_center_inside_polygon() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
+        let config = NarrowPhaseConfig::default();
+
+        // Centre 0.75 below the top face, so the circle pokes 0.25 out of it
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.0, 0.25)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .expect("expected a contact");
+
         let contact = manifold.contact(0);
-        
-        assert!(approx_eq(contact.penetration, 0.5, 1e-4),
-                "Penetration should be 0.5");
+        // The circle must be pushed out through the nearest face (the top one)
+        assert!(approx_eq(contact.normal().y, -1.0), "normal was {}", contact.normal().y);
+        // Overlap = radius + depth = 0.5 + 0.75
+        assert!(approx_eq(contact.penetration(), 1.25));
+        // Contact point lies on the top face
+        assert!(approx_eq(contact.position().y, 1.0));
+    }
+
+    #[test]
+    fn test_circle_deep_inside_polygon_escapes_nearest_face() {
+        let circle = Circle::new(0.25);
+        let polygon = Polygon::from_rectangle(20.0, 20.0);
+        let config = NarrowPhaseConfig::default();
+
+        // Centre near the right-hand face
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(9.9, 0.0)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .expect("expected a contact");
+
+        let contact = manifold.contact(0);
+        assert!(approx_eq(contact.normal().x, -1.0));
+        // Overlap = radius + depth below the face = 0.25 + 0.1
+        assert!(approx_eq(contact.penetration(), 0.35));
+    }
+
+    #[test]
+    fn test_rotated_polygon() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
+        let config = NarrowPhaseConfig::default();
+
+        // Rotate the box by 90 degrees: the contact normal rotates with it.
+        let manifold = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(1.25, 0.0)),
+            &polygon,
+            Transform::from_rotation(Rot2::new(crate::constants::PI_OVER_TWO)),
+            &config,
+        )
+        .expect("expected a contact");
+
+        let contact = manifold.contact(0);
+        assert!(approx_eq(contact.normal().x, -1.0));
+        assert!(approx_eq(contact.normal().y, 0.0));
+        assert!(approx_eq(contact.penetration(), 0.25));
+    }
+
+    #[test]
+    fn test_contact_id_stays_stable() {
+        let circle = Circle::new(0.5);
+        let polygon = box_polygon();
+        let config = NarrowPhaseConfig::default();
+
+        let first = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.0, 1.25)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .unwrap();
+        let second = circle_polygon_collision(
+            &circle,
+            Transform::from_translation(Vec2::new(0.1, 1.2)),
+            &polygon,
+            Transform::identity(),
+            &config,
+        )
+        .unwrap();
+
+        // Both contacts are generated by the same face of the polygon
+        assert_eq!(
+            first.contact(0).contact_id(),
+            second.contact(0).contact_id()
+        );
     }
 }

@@ -10,7 +10,7 @@ mod tests;
 
 pub use point_query::{PointQuery, PointQueryResult};
 pub use aabb_query::{AabbQuery, AabbQueryResult};
-pub use ray_cast::{RayCast, RayCastResult};
+pub use ray_cast::{RayCast, RayCastOptions, RayCastResult};
 pub use bvh::Bvh;
 
 use crate::bodies::BodyHandle;

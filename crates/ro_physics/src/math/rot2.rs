@@ -19,6 +19,7 @@ use crate::math::{utils::approx_eq, Vec2};
 /// The rotation is stored as a single f32, making it compact and efficient.
 /// For performance-critical operations, sine and cosine are cached
 /// when computed.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rot2 {
@@ -89,11 +90,20 @@ impl Rot2 {
     }
 
     /// Check if this is an identity rotation
+    ///
+    /// Uses [`EPSILON`][crate::constants::EPSILON] as the tolerance.
     #[inline]
     #[must_use]
-    pub fn is_identity(self, epsilon: f32 = EPSILON) -> bool {
-        self.angle.abs() <= epsilon
-            || (TWO_PI - self.angle.abs()) <= epsilon
+    pub fn is_identity(self) -> bool {
+        self.is_identity_eps(EPSILON)
+    }
+
+    /// Check if this is an identity rotation within an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn is_identity_eps(self, epsilon: f32) -> bool {
+        let wrapped = self.normalized().angle();
+        wrapped.abs() <= epsilon
     }
 
     /// Invert the rotation
@@ -153,11 +163,13 @@ impl Rot2 {
     }
 
     /// Linear interpolation to another rotation
+    ///
+    /// Interpolates along the shortest arc between the two angles.
     #[inline]
     #[must_use]
     pub fn lerp(self, other: Self, t: f32) -> Self {
         // Use the shortest path for interpolation
-        let delta = (other.angle - self.angle + PI) % TWO_PI - PI;
+        let delta = wrap_angle(other.angle - self.angle);
         Self::new(self.angle + delta * t)
     }
 
@@ -169,13 +181,15 @@ impl Rot2 {
         self.lerp(other, t)
     }
 
-    /// Normalize the angle to the range [-PI, PI]
+    /// Normalize the angle to the range (-PI, PI]
+    ///
+    /// The normalized rotation is equivalent to `self` but its angle lies in
+    /// `(-PI, PI]`. Non-finite angles are returned unchanged.
     #[inline]
     #[must_use]
     pub fn normalized(self) -> Self {
-        let angle = (self.angle + PI) % TWO_PI - PI;
         Self {
-            angle,
+            angle: wrap_angle(self.angle),
             sin: None,
             cos: None,
         }
@@ -197,6 +211,28 @@ impl Rot2 {
         }
         self.angle.abs() < crate::constants::MAX_FLOAT
     }
+}
+
+/// Wrap an angle into the range `(-PI, PI]`.
+///
+/// Non-finite input is returned unchanged. The boundary is inclusive on the
+/// positive side so that `wrap_angle(PI) == PI`, which makes interpolation
+/// between `-PI/2` and `PI/2` take the short arc through zero.
+#[inline]
+#[must_use]
+pub(crate) fn wrap_angle(angle: f32) -> f32 {
+    if !angle.is_finite() {
+        return angle;
+    }
+
+    let wrapped = (angle + PI) % TWO_PI;
+    let wrapped = if wrapped <= 0.0 {
+        wrapped + TWO_PI
+    } else {
+        wrapped
+    };
+
+    wrapped - PI
 }
 
 impl Default for Rot2 {
@@ -233,6 +269,40 @@ impl Mul<Vec2> for Rot2 {
     #[inline]
     fn mul(self, vector: Vec2) -> Self::Output {
         self.rotate(vector)
+    }
+}
+
+impl std::ops::Add for Rot2 {
+    type Output = Self;
+
+    /// Compose two rotations (add their angles)
+    #[inline]
+    fn add(self, other: Self) -> Self::Output {
+        Self::new(self.angle + other.angle)
+    }
+}
+
+impl std::ops::AddAssign for Rot2 {
+    #[inline]
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other;
+    }
+}
+
+impl std::ops::Sub for Rot2 {
+    type Output = Self;
+
+    /// Subtract another rotation (subtract the angles)
+    #[inline]
+    fn sub(self, other: Self) -> Self::Output {
+        Self::new(self.angle - other.angle)
+    }
+}
+
+impl std::ops::SubAssign for Rot2 {
+    #[inline]
+    fn sub_assign(&mut self, other: Self) {
+        *self = *self - other;
     }
 }
 
@@ -275,11 +345,11 @@ mod tests {
     fn test_trigonometry() {
         let r = Rot2::new(PI_OVER_TWO);
         assert!(approx_eq(r.sin(), 1.0));
-        assert!(approx_eq(r.cos(), 0.0, 1e-10));
+        assert!(approx_eq_eps(r.cos(), 0.0, 1e-10));
 
         let (s, c) = r.sin_cos();
         assert!(approx_eq(s, 1.0));
-        assert!(approx_eq(c, 0.0, 1e-10));
+        assert!(approx_eq_eps(c, 0.0, 1e-10));
     }
 
     #[test]
@@ -288,7 +358,7 @@ mod tests {
         let r2 = r1.inverse();
         assert!(approx_eq(r2.angle(), -PI_OVER_TWO));
         assert!(approx_eq(r2.sin(), -1.0));
-        assert!(approx_eq(r2.cos(), 0.0, 1e-10));
+        assert!(approx_eq_eps(r2.cos(), 0.0, 1e-10));
 
         // Composing a rotation with its inverse gives identity
         let composed = r1 * r2;
@@ -301,13 +371,13 @@ mod tests {
         
         let v1 = Vec2::new(1.0, 0.0);
         let rotated = r.rotate(v1);
-        assert!(approx_eq(rotated.x, 0.0, 1e-5));
-        assert!(approx_eq(rotated.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(rotated.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated.y, 1.0, 1e-5));
 
         let v2 = Vec2::new(0.0, 1.0);
         let rotated2 = r.rotate(v2);
-        assert!(approx_eq(rotated2.x, -1.0, 1e-5));
-        assert!(approx_eq(rotated2.y, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated2.x, -1.0, 1e-5));
+        assert!(approx_eq_eps(rotated2.y, 0.0, 1e-5));
     }
 
     #[test]
@@ -316,15 +386,15 @@ mod tests {
         let r2 = Rot2::new(PI_OVER_TWO);
         
         let composed = r1.compose(r2);
-        assert!(approx_eq(composed.angle(), PI, 1e-5));
+        assert!(approx_eq_eps(composed.angle(), PI, 1e-5));
 
         let v = Vec2::new(1.0, 0.0);
         let rotated1 = r1.rotate(v);
         let rotated2 = r2.rotate(rotated1);
         let rotated_composed = composed.rotate(v);
         
-        assert!(approx_eq(rotated2.x, rotated_composed.x, 1e-5));
-        assert!(approx_eq(rotated2.y, rotated_composed.y, 1e-5));
+        assert!(approx_eq_eps(rotated2.x, rotated_composed.x, 1e-5));
+        assert!(approx_eq_eps(rotated2.y, rotated_composed.y, 1e-5));
     }
 
     #[test]
@@ -335,7 +405,7 @@ mod tests {
 
         let v2 = Vec2::new(0.0, 1.0);
         let r2 = Rot2::from_vector(v2);
-        assert!(approx_eq(r2.angle(), PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(r2.angle(), PI_OVER_TWO, 1e-5));
     }
 
     #[test]
@@ -343,12 +413,12 @@ mod tests {
         let from = Vec2::new(1.0, 0.0);
         let to = Vec2::new(0.0, 1.0);
         let r = Rot2::from_to(from, to);
-        assert!(approx_eq(r.angle(), PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(r.angle(), PI_OVER_TWO, 1e-5));
 
         // Verify it transforms from to to
         let rotated = r.rotate(from);
-        assert!(approx_eq(rotated.x, to.x, 1e-5));
-        assert!(approx_eq(rotated.y, to.y, 1e-5));
+        assert!(approx_eq_eps(rotated.x, to.x, 1e-5));
+        assert!(approx_eq_eps(rotated.y, to.y, 1e-5));
     }
 
     #[test]
@@ -357,7 +427,7 @@ mod tests {
         let r2 = Rot2::new(PI);
         
         let mid = r1.lerp(r2, 0.5);
-        assert!(approx_eq(mid.angle(), PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(mid.angle(), PI_OVER_TWO, 1e-5));
 
         // Test shortest path
         let r3 = Rot2::new(-PI_OVER_TWO);
@@ -370,11 +440,11 @@ mod tests {
     fn test_normalized() {
         let r1 = Rot2::new(3.0 * PI);
         let normalized = r1.normalized();
-        assert!(approx_eq(normalized.angle(), -PI, 1e-5));
+        assert!(approx_eq_eps(normalized.angle(), -PI, 1e-5));
 
         let r2 = Rot2::new(-3.0 * PI);
         let normalized2 = r2.normalized();
-        assert!(approx_eq(normalized2.angle(), PI, 1e-5));
+        assert!(approx_eq_eps(normalized2.angle(), PI, 1e-5));
     }
 
     #[test]
@@ -384,13 +454,13 @@ mod tests {
 
         // Multiplication (composition)
         let product = r1 * r2;
-        assert!(approx_eq(product.angle(), PI, 1e-5));
+        assert!(approx_eq_eps(product.angle(), PI, 1e-5));
 
         // Multiplication with vector
         let v = Vec2::new(1.0, 0.0);
         let rotated = r1 * v;
-        assert!(approx_eq(rotated.x, 0.0, 1e-5));
-        assert!(approx_eq(rotated.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(rotated.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated.y, 1.0, 1e-5));
 
         // Negation
         let neg = -r1;

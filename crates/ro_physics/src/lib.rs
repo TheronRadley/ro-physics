@@ -1,33 +1,95 @@
 //! # Ro-Physics
 //!
-//! A production-grade 2D rigid-body physics engine implemented in Rust.
+//! A 2D rigid-body physics engine implemented in Rust.
 //!
 //! ## Features
 //!
-//! - **Rigid Body Dynamics**: Dynamic, static, and kinematic bodies
-//! - **Collision Detection**: Broad-phase (AABB tree) and narrow-phase (SAT, GJK)
-//! - **Constraint Solver**: Sequential impulse solver with contact, distance, and revolute constraints
-//! - **Sleeping System**: Automatic body sleeping for performance
-//! - **Continuous Collision Detection**: Tunneling prevention for fast-moving objects
-//! - **Deterministic Simulation**: Consistent results across runs
+//! - **Rigid body dynamics**: dynamic, static, and kinematic bodies
+//! - **Collision detection**: broad-phase (dynamic AABB tree) and narrow-phase
+//!   (circle/circle, circle/polygon, polygon/polygon)
+//! - **Constraint solver**: sequential impulse solver with warm starting,
+//!   friction, restitution and Baumgarte position correction
+//! - **Sleeping system**: time-threshold based deactivation of resting bodies
+//! - **Continuous collision detection**: conservative advancement to keep fast
+//!   moving bodies from tunnelling
+//! - **Deterministic simulation**: fixed iteration order, no global state
+//!
+//! ## Conventions
+//!
+//! Understanding these conventions is required to use the engine correctly.
+//!
+//! ### Units and coordinates
+//!
+//! - Positions, velocities, forces and sizes are in **metres**, **metres per
+//!   second**, **newtons** and **metres**. There is no implicit unit scale.
+//! - Masses are in **kilograms**, inertia in **kg·m²**, angles in **radians**
+//!   and angular velocities in **radians per second**.
+//! - The world is right-handed with **+X to the right and +Y up**. The default
+//!   gravity is `(0, -9.81)`, i.e. "down" is `-Y`.
+//! - Rotations are counter-clockwise positive. A body's transform maps
+//!   **local space to world space**; [`math::Transform::transform_point`]
+//!   applies rotation first, then translation.
+//!
+//! ### Shapes and polygons
+//!
+//! - Shape vertices are stored relative to the shape's local origin.
+//! - Polygon vertices are **normalised to counter-clockwise winding** on
+//!   construction and their edge normals point **outwards**.
+//! - Bodies rotate about their centre of mass; colliders may carry an extra
+//!   local transform relative to their body.
+//!
+//! ### Contacts
+//!
+//! - A [`collision::ContactManifold`] is generated for **collider A to
+//!   collider B** and its normal points **from A to B**.
+//! - [`collision::Contact::penetration`] is **positive while overlapping** and
+//!   negative (separation) when the shapes are apart.
+//! - Impulses are applied as `-normal * impulse` on body A and
+//!   `+normal * impulse` on body B, so a resting contact pushes A along
+//!   `-normal`, i.e. out of B.
+//!
+//! ### Tolerance policy
+//!
+//! - [`constants::EPSILON`] (`1e-6`) is the default tolerance for
+//!   floating-point comparisons in the math types.
+//! - [`constants::COLLISION_EPSILON`] (`1e-4`) is used for collision
+//!   detection; the solver additionally uses a linear slop so that resting
+//!   contacts stay slightly overlapped instead of jittering.
+//! - Public constructors **reject** non-finite values, negative radii and
+//!   degenerate polygons by returning a [`Result`] (see
+//!   [`shapes::Polygon::try_new`]). `Circle::new` and `Polygon::new` panic on
+//!   invalid input and are meant for already-validated data.
+//!
+//! ### Ownership
+//!
+//! - The [`world::World`] owns all bodies, colliders and constraints. User
+//!   code refers to them through lightweight, copyable handles
+//!   ([`bodies::BodyHandle`], [`collision::ColliderHandle`],
+//!   [`constraints::ConstraintHandle`]).
+//! - Handles carry a generation counter: using a handle after the object it
+//!   refers to has been destroyed always fails (it never resolves to a
+//!   different object).
+//! - Default-constructed handles are "null" handles and never refer to a live
+//!   object.
 //!
 //! ## Architecture
 //!
-//! The engine is organized into modular components:
-//!
-//! - `math`: Vector, rotation, and transform operations
-//! - `geometry`: AABB, ray, and spatial primitives
-//! - `shapes`: Circle, polygon, and compound shape definitions
-//! - `bodies`: Rigid body state and properties
-//! - `collision`: Broad-phase and narrow-phase detection
-//! - `dynamics`: Force, torque, and integration
-//! - `constraints`: Joint and constraint implementations
-//! - `solver`: Contact and constraint solving
-//! - `world`: Simulation world management
+//! - `math`: vector, rotation, and transform operations
+//! - `geometry`: AABB and ray primitives
+//! - `shapes`: circle and polygon shapes with mass properties
+//! - `bodies`: rigid body state and properties
+//! - `collision`: broad-phase, narrow-phase, manifolds and filters
+//! - `constraints`: joint implementations
+//! - `solver`: contact solving
+//! - `world`: simulation world management
+//! - `integration`: velocity/position integration
+//! - `sleeping`: body deactivation
+//! - `query`: spatial queries
+//! - `debug`: debug drawing helpers
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
+//! ```
 //! use ro_physics::prelude::*;
 //!
 //! // Create a simulation world
@@ -38,37 +100,50 @@
 //! world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
 //!
 //! // Create a dynamic circle
-//! let ball = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), 0.0));
+//! let ball = world.create_dynamic_body(Transform::from_translation(Vec2::new(0.0, 5.0)));
 //! world.add_circle(ball, 0.5, 1.0);
 //!
 //! // Step the simulation
 //! world.step(1.0 / 60.0);
+//!
+//! // The ball started falling
+//! assert!(world.get_body(ball).unwrap().position().y < 5.0);
 //! ```
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
-#![warn(clippy::pedantic)]
+// `clippy::pedantic` is deliberately not enabled as a group: under
+// `-D warnings` every style nit would become a build failure, and the group is
+// only worth adopting once the crate can be triaged lint by lint. The
+// individual lints that already proved useful are enabled explicitly below.
+#![warn(clippy::default_trait_access)]
+#![warn(clippy::explicit_into_iter_loop)]
+#![warn(clippy::redundant_closure_for_method_calls)]
+#![warn(clippy::ref_option_ref)]
+#![warn(clippy::unnecessary_wraps)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::many_single_char_names)]
 
 pub mod math;
 pub mod geometry;
 pub mod shapes;
 pub mod bodies;
 pub mod collision;
-pub mod dynamics;
 pub mod constraints;
 pub mod ccd;
 pub mod solver;
 pub mod world;
 pub mod integration;
-pub mod events;
 pub mod sleeping;
 pub mod query;
 pub mod debug;
+
+#[cfg(feature = "serialization")]
 pub mod serialization;
 
 /// Re-exports for convenient access to commonly used types
@@ -80,10 +155,15 @@ pub mod prelude {
     pub use crate::collision::{
         Collider, ColliderHandle, CollisionEvent, ContactManifold, Filter,
     };
-    pub use crate::constraints::{Constraint, ConstraintHandle, DistanceJoint, RevoluteJoint, MotorJoint};
+    pub use crate::constraints::{
+        Constraint, ConstraintHandle, DistanceJoint, MotorJoint, RevoluteJoint,
+    };
     pub use crate::ccd::{CcdConfig, CcdResult, SweptCollisionDetector, TimeOfImpact, ToiResult};
     pub use crate::world::{World, WorldConfig};
-    pub use crate::query::{PointQuery, PointQueryResult, AabbQuery, AabbQueryResult, RayCast, RayCastResult, RayCastOptions, Bvh};
+    pub use crate::query::{
+        AabbQuery, AabbQueryResult, Bvh, PointQuery, PointQueryResult, RayCast, RayCastOptions,
+        RayCastResult,
+    };
     pub use crate::sleeping::SleepingConfig;
     pub use crate::solver::SolverConfig;
 }
@@ -108,84 +188,10 @@ pub mod constants {
     pub const MAX_FLOAT: f32 = 1e20;
     /// Minimum float value for validation
     pub const MIN_FLOAT: f32 = -1e20;
-}
-
-/// Engine configuration with sensible defaults
-pub struct EngineConfig {
-    /// Maximum number of velocity iterations in the solver
-    pub velocity_iterations: usize,
-    /// Maximum number of position iterations in the solver
-    pub position_iterations: usize,
-    /// Gravity vector
-    pub gravity: Vec2,
-    /// Sleeping configuration
-    pub sleeping_config: SleepingConfig,
-    /// Solver configuration
-    pub solver_config: SolverConfig,
-}
-
-impl Default for EngineConfig {
-    fn default() -> Self {
-        Self {
-            velocity_iterations: 8,
-            position_iterations: 3,
-            gravity: Vec2::new(0.0, -9.81),
-            sleeping_config: SleepingConfig::default(),
-            solver_config: SolverConfig::default(),
-        }
-    }
-}
-
-impl EngineConfig {
-    /// Create a new engine configuration
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the gravity vector
-    #[must_use]
-    pub fn with_gravity(mut self, gravity: Vec2) -> Self {
-        self.gravity = gravity;
-        self
-    }
-
-    /// Set the number of velocity iterations
-    #[must_use]
-    pub fn with_velocity_iterations(mut self, iterations: usize) -> Self {
-        self.velocity_iterations = iterations;
-        self
-    }
-
-    /// Set the number of position iterations
-    #[must_use]
-    pub fn with_position_iterations(mut self, iterations: usize) -> Self {
-        self.position_iterations = iterations;
-        self
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_engine_config_default() {
-        let config = EngineConfig::default();
-        assert_eq!(config.velocity_iterations, 8);
-        assert_eq!(config.position_iterations, 3);
-        assert_eq!(config.gravity, Vec2::new(0.0, -9.81));
-    }
-
-    #[test]
-    fn test_engine_config_builder() {
-        let config = EngineConfig::new()
-            .with_gravity(Vec2::new(0.0, -10.0))
-            .with_velocity_iterations(10)
-            .with_position_iterations(5);
-
-        assert_eq!(config.gravity, Vec2::new(0.0, -10.0));
-        assert_eq!(config.velocity_iterations, 10);
-        assert_eq!(config.position_iterations, 5);
-    }
+    /// Largest timestep the simulation accepts (seconds)
+    pub const MAX_TIMESTEP: f32 = 1.0 / 15.0;
+    /// Smallest timestep the simulation accepts (seconds)
+    pub const MIN_TIMESTEP: f32 = 1e-5;
+    /// Contact slop: overlaps smaller than this are not corrected
+    pub const LINEAR_SLOP: f32 = 0.005;
 }

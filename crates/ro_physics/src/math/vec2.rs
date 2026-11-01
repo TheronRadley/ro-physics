@@ -7,13 +7,14 @@ use std::fmt;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::constants::EPSILON;
-use crate::math::utils::{approx_eq, approx_zero};
+use crate::math::utils::approx_eq;
 
 /// A 2D vector for physics calculations.
 ///
 /// This is the fundamental building block for all geometric and physical
 /// calculations in the engine. It provides comprehensive vector operations
 /// optimized for physics simulation.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Vec2 {
@@ -107,10 +108,33 @@ impl Vec2 {
     }
 
     /// Check if the vector is approximately zero
+    ///
+    /// Uses [`EPSILON`][crate::constants::EPSILON] as the tolerance.
     #[inline]
     #[must_use]
-    pub fn is_zero(self, epsilon: f32 = EPSILON) -> bool {
+    pub fn is_zero(self) -> bool {
+        self.length_squared() <= EPSILON * EPSILON
+    }
+
+    /// Check if the vector is approximately zero with an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn is_zero_eps(self, epsilon: f32) -> bool {
         self.length_squared() <= epsilon * epsilon
+    }
+
+    /// Largest component of the vector
+    #[inline]
+    #[must_use]
+    pub fn max_element(self) -> f32 {
+        self.x.max(self.y)
+    }
+
+    /// Smallest component of the vector
+    #[inline]
+    #[must_use]
+    pub fn min_element(self) -> f32 {
+        self.x.min(self.y)
     }
 
     /// Normalize the vector to unit length
@@ -672,47 +696,39 @@ mod tests {
         
         // Rotate 90 degrees (PI/2)
         let rotated_90 = v.rotate(crate::constants::PI_OVER_TWO);
-        assert!(approx_eq(rotated_90.x, 0.0, 1e-5));
-        assert!(approx_eq(rotated_90.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(rotated_90.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated_90.y, 1.0, 1e-5));
 
         // Rotate 180 degrees (PI)
         let rotated_180 = v.rotate(crate::constants::PI);
-        assert!(approx_eq(rotated_180.x, -1.0, 1e-5));
-        assert!(approx_eq(rotated_180.y, 0.0, 1e-5));
+        assert!(approx_eq_eps(rotated_180.x, -1.0, 1e-5));
+        assert!(approx_eq_eps(rotated_180.y, 0.0, 1e-5));
     }
 
     #[test]
     fn test_angle() {
         let v1 = Vec2::new(1.0, 0.0);
-        assert!(approx_eq(v1.angle(), 0.0, 1e-5));
+        assert!(approx_eq_eps(v1.angle(), 0.0, 1e-5));
 
         let v2 = Vec2::new(0.0, 1.0);
-        assert!(approx_eq(v2.angle(), crate::constants::PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(v2.angle(), crate::constants::PI_OVER_TWO, 1e-5));
 
         let v3 = Vec2::new(-1.0, 0.0);
-        assert!(approx_eq(v3.angle(), crate::constants::PI, 1e-5));
+        assert!(approx_eq_eps(v3.angle(), crate::constants::PI, 1e-5));
 
         let v4 = Vec2::new(0.0, -1.0);
-        assert!(approx_eq(v4.angle(), -crate::constants::PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(v4.angle(), -crate::constants::PI_OVER_TWO, 1e-5));
     }
 
     #[test]
     fn test_angle_between() {
         let v1 = Vec2::new(1.0, 0.0);
         let v2 = Vec2::new(0.0, 1.0);
-        assert!(approx_eq(
-            v1.angle_between(v2),
-            crate::constants::PI_OVER_TWO,
-            1e-5
-        ));
+        assert!(approx_eq_eps(v1.angle_between(v2), crate::constants::PI_OVER_TWO, 1e-5));
 
         let v3 = Vec2::new(1.0, 0.0);
         let v4 = Vec2::new(-1.0, 0.0);
-        assert!(approx_eq(
-            v3.angle_between(v4),
-            crate::constants::PI,
-            1e-5
-        ));
+        assert!(approx_eq_eps(v3.angle_between(v4), crate::constants::PI, 1e-5));
     }
 
     #[test]

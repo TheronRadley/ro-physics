@@ -92,10 +92,10 @@ fn test_momentum_conservation_single_collision() {
     let mut world = World::new(WorldConfig::new().with_gravity(Vec2::zero()));
     
     // Create two bodies with initial velocities
-    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0), 0.0));
+    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0),Rot2::new(0.0)));
     world.add_circle(body_a, 1.0, 1.0);
     
-    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0), 0.0));
+    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0),Rot2::new(0.0)));
     world.add_circle(body_b, 1.0, 1.0);
     
     // Set initial velocities (toward each other)
@@ -133,9 +133,7 @@ fn test_momentum_conservation_multiple_bodies() {
     // Create multiple dynamic bodies
     for i in 0..5 {
         let body = world.create_dynamic_body(Transform::new(
-            Vec2::new(i as f32 * 2.0 - 5.0, 5.0),
-            0.0
-        ));
+            Vec2::new(i as f32 * 2.0 - 5.0, 5.0),Rot2::new(0.0)));
         world.add_circle(body, 1.0, 1.0);
         
         if let Some(b) = world.get_body_mut(body) {
@@ -174,7 +172,7 @@ fn test_angular_momentum_conservation() {
     let body_a = world.create_dynamic_body(Transform::identity());
     world.add_circle(body_a, 1.0, 1.0);
     
-    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0), 0.0));
+    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0),Rot2::new(0.0)));
     world.add_circle(body_b, 1.0, 1.0);
     
     // Set angular velocities
@@ -212,10 +210,10 @@ fn test_energy_conservation_elastic() {
     let mut world = World::new(WorldConfig::new().with_gravity(Vec2::zero()));
     
     // Create two bodies
-    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0), 0.0));
+    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0),Rot2::new(0.0)));
     let collider_a = world.add_circle(body_a, 1.0, 1.0);
     
-    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0), 0.0));
+    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0),Rot2::new(0.0)));
     let collider_b = world.add_circle(body_b, 1.0, 1.0);
     
     // Set high restitution
@@ -256,10 +254,10 @@ fn test_energy_dissipation_inelastic() {
     let mut world = World::new(WorldConfig::new().with_gravity(Vec2::zero()));
     
     // Create two bodies
-    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0), 0.0));
+    let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0),Rot2::new(0.0)));
     let collider_a = world.add_circle(body_a, 1.0, 1.0);
     
-    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0), 0.0));
+    let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0),Rot2::new(0.0)));
     let collider_b = world.add_circle(body_b, 1.0, 1.0);
     
     // Set low restitution
@@ -304,7 +302,7 @@ fn test_mechanical_energy_conservation_with_gravity() {
     let mut world = World::new(WorldConfig::new().with_gravity(gravity));
     
     // Create a single body (no collisions, so energy should be conserved modulo gravity work)
-    let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0), 0.0));
+    let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0),Rot2::new(0.0)));
     world.add_circle(body, 1.0, 1.0);
     
     // Set initial velocity upward
@@ -344,15 +342,11 @@ fn test_deterministic_simulation() {
     // Setup both worlds identically
     for i in 0..10 {
         let body1 = world1.create_dynamic_body(Transform::new(
-            Vec2::new(i as f32 * 2.0 - 5.0, 10.0),
-            0.0
-        ));
+            Vec2::new(i as f32 * 2.0 - 5.0, 10.0),Rot2::new(0.0)));
         world1.add_circle(body1, 1.0, 1.0);
         
         let body2 = world2.create_dynamic_body(Transform::new(
-            Vec2::new(i as f32 * 2.0 - 5.0, 10.0),
-            0.0
-        ));
+            Vec2::new(i as f32 * 2.0 - 5.0, 10.0),Rot2::new(0.0)));
         world2.add_circle(body2, 1.0, 1.0);
         
         // Set same initial velocities
@@ -425,9 +419,7 @@ fn test_no_nan_propagation() {
             Vec2::new(
                 (i as f32 % 10.0) * 2.0 - 10.0,
                 (i as f32 / 10.0) * 3.0 + 5.0
-            ),
-            0.0
-        ));
+            ),Rot2::new(0.0)));
         
         if i % 2 == 0 {
             world.add_circle(body, 0.5 + (i as f32 % 5.0) * 0.1, 1.0);
@@ -490,7 +482,7 @@ fn test_stable_stacking() {
     let mut bodies = Vec::new();
     
     for _ in 0..20 {
-        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y), 0.0));
+        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y),Rot2::new(0.0)));
         world.add_box(body, Vec2::new(0.9, 0.9), 1.0);
         bodies.push(body);
         y += 1.0;

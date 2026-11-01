@@ -5,7 +5,6 @@
 
 use crate::bodies::Body;
 use crate::collision::Collider;
-use crate::constants::EPSILON;
 use crate::math::{Transform, Vec2};
 use crate::shapes::Shape;
 use super::{TimeOfImpact, ToiResult, CcdConfig};
@@ -26,13 +25,6 @@ impl SweptCollisionDetector {
     #[must_use]
     pub fn new(config: CcdConfig) -> Self {
         Self { config }
-    }
-
-    /// Create a new swept collision detector with default configuration
-    #[inline]
-    #[must_use]
-    pub fn default() -> Self {
-        Self::new(CcdConfig::default())
     }
 
     /// Get the configuration
@@ -60,8 +52,8 @@ impl SweptCollisionDetector {
             return None;
         }
 
-        let shape_a = collider_a.shape()?;
-        let shape_b = collider_b.shape()?;
+        let shape_a = collider_a.shape();
+        let shape_b = collider_b.shape();
 
         let transform_a = body_a.transform();
         let transform_b = body_b.transform();
@@ -195,7 +187,7 @@ impl SweptCollisionDetector {
 
 impl Default for SweptCollisionDetector {
     fn default() -> Self {
-        Self::default()
+        Self::new(CcdConfig::default())
     }
 }
 
@@ -256,7 +248,6 @@ mod tests {
     use crate::bodies::BodyHandle;
     use crate::collision::ColliderHandle;
     use crate::shapes::{Circle, Polygon};
-    use crate::math::Rot2;
 
     #[test]
     fn test_construction() {

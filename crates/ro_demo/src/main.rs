@@ -258,18 +258,14 @@ fn create_gravity_scene(world: &mut World) {
     // Create some falling circles
     for i in 0..5 {
         let body = world.create_dynamic_body(Transform::new(
-            Vec2::new(-5.0 + i as f32 * 3.0, 10.0),
-            0.0,
-        ));
+            Vec2::new(-5.0 + i as f32 * 3.0, 10.0),Rot2::new(0.0)));
         world.add_circle(body, 1.0, 1.0);
     }
 
     // Create some falling boxes
     for i in 0..5 {
         let body = world.create_dynamic_body(Transform::new(
-            Vec2::new(-5.0 + i as f32 * 3.0, 15.0),
-            0.0,
-        ));
+            Vec2::new(-5.0 + i as f32 * 3.0, 15.0),Rot2::new(0.0)));
         world.add_box(body, Vec2::new(1.0, 1.0), 1.0);
     }
 }
@@ -283,7 +279,7 @@ fn create_stacking_scene(world: &mut World) {
     // Create a stack of boxes
     let mut y = 1.0;
     for _i in 0..10 {
-        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y), 0.0));
+        let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y),Rot2::new(0.0)));
         world.add_box(body, Vec2::new(1.0, 0.5), 1.0);
         y += 1.0;
     }
@@ -298,14 +294,12 @@ fn create_dominoes_scene(world: &mut World) {
     // Create a line of dominoes
     for i in 0..20 {
         let body = world.create_dynamic_body(Transform::new(
-            Vec2::new(-10.0 + i as f32 * 1.2, 0.75),
-            0.0,
-        ));
+            Vec2::new(-10.0 + i as f32 * 1.2, 0.75),Rot2::new(0.0)));
         world.add_box(body, Vec2::new(0.2, 1.0), 1.0);
     }
 
     // Add a ball to knock them over
-    let ball = world.create_dynamic_body(Transform::new(Vec2::new(-15.0, 5.0), 0.0));
+    let ball = world.create_dynamic_body(Transform::new(Vec2::new(-15.0, 5.0),Rot2::new(0.0)));
     world.add_circle(ball, 1.0, 1.0);
     if let Some(body) = world.get_body_mut(ball) {
         body.set_linear_velocity(Vec2::new(10.0, 0.0));
@@ -319,18 +313,16 @@ fn create_bouncy_scene(world: &mut World) {
     world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
 
     // Create walls
-    let left_wall = world.create_static_body(Transform::new(Vec2::new(-10.0, 5.0), 0.0));
+    let left_wall = world.create_static_body(Transform::new(Vec2::new(-10.0, 5.0),Rot2::new(0.0)));
     world.add_box(left_wall, Vec2::new(0.5, 10.0), 0.0);
 
-    let right_wall = world.create_static_body(Transform::new(Vec2::new(10.0, 5.0), 0.0));
+    let right_wall = world.create_static_body(Transform::new(Vec2::new(10.0, 5.0),Rot2::new(0.0)));
     world.add_box(right_wall, Vec2::new(0.5, 10.0), 0.0);
 
     // Create bouncy balls
     for i in 0..10 {
         let body = world.create_dynamic_body(Transform::new(
-            Vec2::new(-8.0 + i as f32 * 2.0, 15.0),
-            0.0,
-        ));
+            Vec2::new(-8.0 + i as f32 * 2.0, 15.0),Rot2::new(0.0)));
         let collider = world.add_circle(body, 1.0, 1.0);
         
         // Set high restitution
@@ -352,7 +344,7 @@ fn create_polygon_scene(world: &mut World) {
         Vec2::new(1.0, -1.0),
         Vec2::new(0.0, 1.0),
     ];
-    let triangle = world.create_dynamic_body(Transform::new(Vec2::new(-5.0, 5.0), 0.0));
+    let triangle = world.create_dynamic_body(Transform::new(Vec2::new(-5.0, 5.0),Rot2::new(0.0)));
     world.add_polygon(triangle, triangle_vertices, 1.0);
 
     // Create a hexagon
@@ -361,7 +353,7 @@ fn create_polygon_scene(world: &mut World) {
         let angle = std::f32::consts::PI / 3.0 * i as f32;
         hexagon_vertices.push(Vec2::new(angle.cos(), angle.sin()));
     }
-    let hexagon = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0), 0.0));
+    let hexagon = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 5.0),Rot2::new(0.0)));
     world.add_polygon(hexagon, hexagon_vertices, 1.0);
 
     // Create a pentagon
@@ -370,7 +362,7 @@ fn create_polygon_scene(world: &mut World) {
         let angle = std::f32::consts::PI * 2.0 / 5.0 * i as f32;
         pentagon_vertices.push(Vec2::new(angle.cos() * 1.5, angle.sin() * 1.5));
     }
-    let pentagon = world.create_dynamic_body(Transform::new(Vec2::new(5.0, 5.0), 0.0));
+    let pentagon = world.create_dynamic_body(Transform::new(Vec2::new(5.0, 5.0),Rot2::new(0.0)));
     world.add_polygon(pentagon, pentagon_vertices, 1.0);
 }
 
@@ -381,43 +373,43 @@ fn create_ragdoll_scene(world: &mut World) {
     world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
 
     // Create torso (center of the ragdoll)
-    let torso = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0), 0.0));
+    let torso = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0),Rot2::new(0.0)));
     world.add_box(torso, Vec2::new(0.4, 0.6), 10.0);
 
     // Create head
-    let head = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.8), 0.0));
+    let head = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.8),Rot2::new(0.0)));
     world.add_circle(head, 0.3, 10.0);
 
     // Create left upper arm
-    let left_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 9.5), 0.0));
+    let left_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 9.5),Rot2::new(0.0)));
     world.add_box(left_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
     // Create left lower arm
-    let left_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 8.8), 0.0));
+    let left_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(-0.5, 8.8),Rot2::new(0.0)));
     world.add_box(left_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
     // Create right upper arm
-    let right_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 9.5), 0.0));
+    let right_upper_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 9.5),Rot2::new(0.0)));
     world.add_box(right_upper_arm, Vec2::new(0.15, 0.4), 10.0);
 
     // Create right lower arm
-    let right_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 8.8), 0.0));
+    let right_lower_arm = world.create_dynamic_body(Transform::new(Vec2::new(0.5, 8.8),Rot2::new(0.0)));
     world.add_box(right_lower_arm, Vec2::new(0.15, 0.4), 10.0);
 
     // Create left upper leg
-    let left_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 9.0), 0.0));
+    let left_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 9.0),Rot2::new(0.0)));
     world.add_box(left_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
     // Create left lower leg
-    let left_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 8.2), 0.0));
+    let left_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(-0.2, 8.2),Rot2::new(0.0)));
     world.add_box(left_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
     // Create right upper leg
-    let right_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 9.0), 0.0));
+    let right_upper_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 9.0),Rot2::new(0.0)));
     world.add_box(right_upper_leg, Vec2::new(0.15, 0.5), 10.0);
 
     // Create right lower leg
-    let right_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 8.2), 0.0));
+    let right_lower_leg = world.create_dynamic_body(Transform::new(Vec2::new(0.2, 8.2),Rot2::new(0.0)));
     world.add_box(right_lower_leg, Vec2::new(0.15, 0.5), 10.0);
 
     // Create constraints to connect the ragdoll

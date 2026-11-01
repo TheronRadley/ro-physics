@@ -24,7 +24,7 @@ fn stress_many_bodies(c: &mut Criterion) {
             for i in 0..*count {
                 let x = (i as f32 % 20.0) * 2.0 - 20.0;
                 let y = (i as f32 / 20.0) * 2.0 + 10.0;
-                let body = world.create_dynamic_body(Transform::new(Vec2::new(x, y), 0.0));
+                let body = world.create_dynamic_body(Transform::new(Vec2::new(x, y),Rot2::new(0.0)));
                 if i % 2 == 0 {
                     world.add_circle(body, 0.5, 1.0);
                 } else {
@@ -61,9 +61,7 @@ fn stress_high_velocity(c: &mut Criterion) {
             // Create fast-moving bodies
             for i in 0..*count {
                 let body = world.create_dynamic_body(Transform::new(
-                    Vec2::new(i as f32 * 5.0, 20.0),
-                    0.0
-                ));
+                    Vec2::new(i as f32 * 5.0, 20.0),Rot2::new(0.0)));
                 world.add_circle(body, 0.5, 1.0);
                 if let Some(b) = world.get_body_mut(body) {
                     b.set_linear_velocity(Vec2::new(0.0, -100.0));
@@ -99,14 +97,12 @@ fn stress_constraints(c: &mut Criterion) {
                 
                 // Torso
                 let torso = world.create_dynamic_body(Transform::new(
-                    Vec2::new(offset, 10.0), 0.0
-                ));
+                    Vec2::new(offset, 10.0),Rot2::new(0.0)));
                 world.add_box(torso, Vec2::new(0.4, 0.6), 10.0);
                 
                 // Head
                 let head = world.create_dynamic_body(Transform::new(
-                    Vec2::new(offset, 10.8), 0.0
-                ));
+                    Vec2::new(offset, 10.8),Rot2::new(0.0)));
                 world.add_circle(head, 0.3, 10.0);
                 
                 // Connect with joint
@@ -139,9 +135,7 @@ fn stress_polygons(c: &mut Criterion) {
             // Create polygons with different vertex counts
             for i in 0..*count {
                 let body = world.create_dynamic_body(Transform::new(
-                    Vec2::new(i as f32 * 3.0, 10.0),
-                    0.0
-                ));
+                    Vec2::new(i as f32 * 3.0, 10.0),Rot2::new(0.0)));
                 
                 // Create polygon with 3-8 vertices
                 let n = 3 + (i % 6) as usize;
@@ -174,7 +168,7 @@ fn bench_queries(c: &mut Criterion) {
     for i in 0..1000 {
         let x = (i as f32 % 50.0) * 2.0 - 50.0;
         let y = (i as f32 / 50.0) * 2.0 + 5.0;
-        let body = world.create_dynamic_body(Transform::new(Vec2::new(x, y), 0.0));
+        let body = world.create_dynamic_body(Transform::new(Vec2::new(x, y),Rot2::new(0.0)));
         world.add_circle(body, 0.5, 1.0);
     }
     

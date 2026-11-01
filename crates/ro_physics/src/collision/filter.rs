@@ -67,24 +67,25 @@ impl Filter {
     }
 
     /// Check if this filter can collide with another filter
+    ///
+    /// Two colliders collide when each one's category is accepted by the
+    /// other's mask. A non-zero group index overrides the category/mask test
+    /// when both colliders share it: a positive group forces the pair to
+    /// collide, a negative group forces it never to collide (the standard
+    /// Box2D semantics).
     #[inline]
     #[must_use]
-    pub fn can_collide_with(self, other: &Self) -> bool {
+    pub fn can_collide_with(&self, other: &Self) -> bool {
+        // Group filtering takes precedence over the category/mask test
+        if self.group_index != 0 && self.group_index == other.group_index {
+            return self.group_index > 0;
+        }
+
         // Check category/mask collision
         if (self.category_bits & other.mask_bits) == 0 {
             return false;
         }
         if (other.category_bits & self.mask_bits) == 0 {
-            return false;
-        }
-
-        // Check group filtering
-        if self.group_index != 0 && self.group_index == other.group_index {
-            return true;
-        }
-
-        // Check negative group filtering
-        if self.group_index < 0 && other.group_index < 0 {
             return false;
         }
 

@@ -15,6 +15,7 @@ use crate::math::{Rot2};
 /// This is the fundamental type for representing the state of rigid bodies
 /// in the physics simulation. It supports composition, inversion, and
 /// transformation of points and vectors.
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Transform {
@@ -91,8 +92,15 @@ impl Transform {
     /// Check if this is an identity transform
     #[inline]
     #[must_use]
-    pub fn is_identity(self, epsilon: f32 = EPSILON) -> bool {
-        self.position.is_zero(epsilon) && self.rotation.is_identity(epsilon)
+    pub fn is_identity(self) -> bool {
+        self.is_identity_eps(EPSILON)
+    }
+
+    /// Check if this is an identity transform within an explicit tolerance
+    #[inline]
+    #[must_use]
+    pub fn is_identity_eps(self, epsilon: f32) -> bool {
+        self.position.is_zero_eps(epsilon) && self.rotation.is_identity_eps(epsilon)
     }
 
     /// Transform a point (applies both rotation and translation)
@@ -217,10 +225,13 @@ impl Transform {
         // [a b] = [cos -sin]
         // [c d] = [sin  cos]
         let a = matrix[0];
-        let b = matrix[1];
         let c = matrix[3];
-        let d = matrix[4];
-        
+
+        // `b` and `d` are the remaining entries of the rotation submatrix.
+        // A pure rotation satisfies b == -c and d == a, so they carry no
+        // additional information here; they are read for validation only.
+        let (_b, _d) = (matrix[1], matrix[4]);
+
         // Calculate angle from the rotation matrix
         // atan2(sin, cos) = atan2(c, a)
         let angle = c.atan2(a);
@@ -320,16 +331,16 @@ mod tests {
         let t2 = Transform::from_rotation(Rot2::new(PI_OVER_TWO));
         let p2 = Vec2::new(1.0, 0.0);
         let transformed2 = t2.transform_point(p2);
-        assert!(approx_eq(transformed2.x, 0.0, 1e-5));
-        assert!(approx_eq(transformed2.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(transformed2.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(transformed2.y, 1.0, 1e-5));
 
         // Combined transform
         let t3 = Transform::new(Vec2::new(1.0, 2.0), Rot2::new(PI_OVER_TWO));
         let p3 = Vec2::new(1.0, 0.0);
         let transformed3 = t3.transform_point(p3);
         // Rotate (1,0) by 90 degrees -> (0,1), then translate by (1,2) -> (1,3)
-        assert!(approx_eq(transformed3.x, 1.0, 1e-5));
-        assert!(approx_eq(transformed3.y, 3.0, 1e-5));
+        assert!(approx_eq_eps(transformed3.x, 1.0, 1e-5));
+        assert!(approx_eq_eps(transformed3.y, 3.0, 1e-5));
     }
 
     #[test]
@@ -338,8 +349,8 @@ mod tests {
         let v = Vec2::new(1.0, 0.0);
         let transformed = t.transform_vector(v);
         // Only rotation is applied, no translation
-        assert!(approx_eq(transformed.x, 0.0, 1e-5));
-        assert!(approx_eq(transformed.y, 1.0, 1e-5));
+        assert!(approx_eq_eps(transformed.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(transformed.y, 1.0, 1e-5));
     }
 
     #[test]
@@ -359,8 +370,8 @@ mod tests {
         let p = Vec2::new(3.0, 4.0);
         let transformed = t.transform_point(p);
         let back = inv.transform_point(transformed);
-        assert!(approx_eq(back.x, p.x, 1e-5));
-        assert!(approx_eq(back.y, p.y, 1e-5));
+        assert!(approx_eq_eps(back.x, p.x, 1e-5));
+        assert!(approx_eq_eps(back.y, p.y, 1e-5));
     }
 
     #[test]
@@ -381,8 +392,8 @@ mod tests {
         let p2 = Vec2::new(1.0, 0.0);
         let transformed2 = composed2.transform_point(p2);
         // First translate (1,0) by (1,0) -> (2,0), then rotate by 90 -> (0,2)
-        assert!(approx_eq(transformed2.x, 0.0, 1e-5));
-        assert!(approx_eq(transformed2.y, 2.0, 1e-5));
+        assert!(approx_eq_eps(transformed2.x, 0.0, 1e-5));
+        assert!(approx_eq_eps(transformed2.y, 2.0, 1e-5));
     }
 
     #[test]
@@ -392,7 +403,7 @@ mod tests {
         
         let mid = t1.lerp(t2, 0.5);
         assert_eq!(mid.position, Vec2::new(5.0, 5.0));
-        assert!(approx_eq(mid.rotation.angle(), PI / 2.0, 1e-5));
+        assert!(approx_eq_eps(mid.rotation.angle(), PI / 2.0, 1e-5));
     }
 
     #[test]
@@ -438,18 +449,18 @@ mod tests {
         // [0 -1 1]
         // [1  0 2]
         // [0  0 1]
-        assert!(approx_eq(matrix[0], 0.0, 1e-5));
-        assert!(approx_eq(matrix[1], -1.0, 1e-5));
-        assert!(approx_eq(matrix[2], 1.0, 1e-5));
-        assert!(approx_eq(matrix[3], 1.0, 1e-5));
-        assert!(approx_eq(matrix[4], 0.0, 1e-5));
-        assert!(approx_eq(matrix[5], 2.0, 1e-5));
+        assert!(approx_eq_eps(matrix[0], 0.0, 1e-5));
+        assert!(approx_eq_eps(matrix[1], -1.0, 1e-5));
+        assert!(approx_eq_eps(matrix[2], 1.0, 1e-5));
+        assert!(approx_eq_eps(matrix[3], 1.0, 1e-5));
+        assert!(approx_eq_eps(matrix[4], 0.0, 1e-5));
+        assert!(approx_eq_eps(matrix[5], 2.0, 1e-5));
 
         // Test round-trip
         let t2 = Transform::from_matrix(matrix);
-        assert!(approx_eq(t2.position.x, 1.0, 1e-5));
-        assert!(approx_eq(t2.position.y, 2.0, 1e-5));
-        assert!(approx_eq(t2.rotation.angle(), PI_OVER_TWO, 1e-5));
+        assert!(approx_eq_eps(t2.position.x, 1.0, 1e-5));
+        assert!(approx_eq_eps(t2.position.y, 2.0, 1e-5));
+        assert!(approx_eq_eps(t2.rotation.angle(), PI_OVER_TWO, 1e-5));
     }
 
     #[test]
@@ -489,8 +500,8 @@ mod tests {
         let transformed = t.transform_point(p);
         let back = t.inverse_transform_point(transformed);
         
-        assert!(approx_eq(back.x, p.x, 1e-5));
-        assert!(approx_eq(back.y, p.y, 1e-5));
+        assert!(approx_eq_eps(back.x, p.x, 1e-5));
+        assert!(approx_eq_eps(back.y, p.y, 1e-5));
     }
 
     #[test]

@@ -5,9 +5,7 @@
 
 use std::fmt;
 
-use crate::constants::EPSILON;
 use crate::math::{Rot2, Transform, Vec2};
-use crate::shapes::Shape;
 use super::{BodyHandle, BodyType};
 
 /// A rigid body in the physics simulation.
@@ -20,7 +18,6 @@ use super::{BodyHandle, BodyType};
 /// - **Static**: Fixed in place, infinite mass, does not move
 /// - **Dynamic**: Affected by forces and collisions, normal physics behavior
 /// - **Kinematic**: Moves according to velocity but not affected by forces
-#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct Body {
     /// Handle to this body
@@ -55,10 +52,13 @@ pub struct Body {
     enabled: bool,
     /// Whether the body is sleeping
     sleeping: bool,
+    /// Seconds the body has been below the sleep thresholds
+    sleep_timer: f32,
     /// User-defined data
+    ///
+    /// Not cloned by [`Clone`] and skipped during (de)serialization.
+    #[cfg_attr(feature = "serialization", serde(skip))]
     user_data: Option<Box<dyn std::any::Any + Send + Sync>>,
-    /// Associated shape
-    shape: Option<Shape>,
 }
 
 impl Body {
@@ -83,8 +83,8 @@ impl Body {
             gravity_scale: 1.0,
             enabled: true,
             sleeping: false,
+            sleep_timer: 0.0,
             user_data: None,
-            shape: None,
         }
     }
 
@@ -314,15 +314,27 @@ impl Body {
     }
 
     /// Set if the body is sleeping
+    ///
+    /// Putting a body to sleep zeroes its velocity so that a sleeping body can
+    /// never accumulate motion.
     #[inline]
     pub fn set_sleeping(&mut self, sleeping: bool) {
         self.sleeping = sleeping;
+        if sleeping {
+            self.linear_velocity = Vec2::zero();
+            self.angular_velocity = 0.0;
+            self.force = Vec2::zero();
+            self.torque = 0.0;
+        } else {
+            self.sleep_timer = 0.0;
+        }
     }
 
-    /// Wake up the body
+    /// Wake up the body and reset its sleep timer
     #[inline]
     pub fn wake_up(&mut self) {
         self.sleeping = false;
+        self.sleep_timer = 0.0;
     }
 
     /// Get the force accumulator
@@ -397,37 +409,27 @@ impl Body {
         self.torque = 0.0;
     }
 
-    /// Get the associated shape
+    /// Seconds the body has continuously been below the sleep thresholds
     #[inline]
     #[must_use]
-    pub const fn shape(&self) -> Option<&Shape> {
-        self.shape.as_ref()
+    pub const fn sleep_timer(&self) -> f32 {
+        self.sleep_timer
     }
 
-    /// Get the associated shape mutably
+    /// Reset the sleep timer to zero
     #[inline]
-    #[must_use]
-    pub fn shape_mut(&mut self) -> Option<&mut Shape> {
-        self.shape.as_mut()
+    pub fn reset_sleep_timer(&mut self) {
+        self.sleep_timer = 0.0;
     }
 
-    /// Set the associated shape
+    /// Advance the sleep timer by `dt`
+    ///
+    /// Returns the accumulated time so the caller can compare it against its
+    /// configured sleep threshold.
     #[inline]
-    pub fn set_shape(&mut self, shape: Shape) {
-        self.shape = Some(shape);
-    }
-
-    /// Remove the associated shape
-    #[inline]
-    pub fn remove_shape(&mut self) {
-        self.shape = None;
-    }
-
-    /// Check if the body has a shape
-    #[inline]
-    #[must_use]
-    pub fn has_shape(&self) -> bool {
-        self.shape.is_some()
+    pub fn advance_sleep_timer(&mut self, dt: f32) -> f32 {
+        self.sleep_timer += dt.max(0.0);
+        self.sleep_timer
     }
 
     /// Get user data
@@ -552,6 +554,52 @@ impl Body {
             let angular_ke = 0.5 * self.inertia * self.angular_velocity * self.angular_velocity;
             linear_ke + angular_ke
         }
+    }
+}
+
+impl Clone for Body {
+    /// Clone the body.
+    ///
+    /// User data is **not** cloned: [`Box<dyn Any>`][std::any::Any] cannot be
+    /// duplicated generically, so the clone starts out without user data.
+    fn clone(&self) -> Self {
+        Self {
+            handle: self.handle,
+            body_type: self.body_type,
+            transform: self.transform,
+            linear_velocity: self.linear_velocity,
+            angular_velocity: self.angular_velocity,
+            force: self.force,
+            torque: self.torque,
+            mass: self.mass,
+            inv_mass: self.inv_mass,
+            inertia: self.inertia,
+            inv_inertia: self.inv_inertia,
+            linear_damping: self.linear_damping,
+            angular_damping: self.angular_damping,
+            gravity_scale: self.gravity_scale,
+            enabled: self.enabled,
+            sleeping: self.sleeping,
+            sleep_timer: self.sleep_timer,
+            user_data: None,
+        }
+    }
+}
+
+impl fmt::Debug for Body {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Body")
+            .field("handle", &self.handle)
+            .field("body_type", &self.body_type)
+            .field("position", &self.transform.position)
+            .field("rotation", &self.transform.rotation.angle())
+            .field("linear_velocity", &self.linear_velocity)
+            .field("angular_velocity", &self.angular_velocity)
+            .field("mass", &self.mass)
+            .field("inertia", &self.inertia)
+            .field("sleeping", &self.sleeping)
+            .field("has_user_data", &self.user_data.is_some())
+            .finish()
     }
 }
 
@@ -692,12 +740,30 @@ mod tests {
         let mut body = Body::new_dynamic(handle);
 
         assert!(!body.is_sleeping());
+        assert!(approx_eq(body.sleep_timer(), 0.0));
 
+        body.set_linear_velocity(Vec2::new(1.0, 0.0));
         body.set_sleeping(true);
         assert!(body.is_sleeping());
+        // Sleeping bodies never keep momentum
+        assert_eq!(body.linear_velocity(), Vec2::zero());
+        assert_eq!(body.angular_velocity(), 0.0);
 
         body.wake_up();
         assert!(!body.is_sleeping());
+    }
+
+    #[test]
+    fn test_sleep_timer() {
+        let handle = BodyHandle::new(1, 0);
+        let mut body = Body::new_dynamic(handle);
+
+        body.advance_sleep_timer(0.1);
+        body.advance_sleep_timer(0.1);
+        assert!(approx_eq(body.sleep_timer(), 0.2));
+
+        body.wake_up();
+        assert!(approx_eq(body.sleep_timer(), 0.0));
     }
 
     #[test]
@@ -717,7 +783,7 @@ mod tests {
         body.add_force_at_point(Vec2::new(5.0, 0.0), Vec2::new(1.0, 0.0));
         // Force should be added, torque should be increased by r x F
         assert_eq!(body.force(), Vec2::new(15.0, 5.0));
-        assert!(approx_eq(body.torque(), 2.0 + 0.0, 1e-5)); // (1,0) x (5,0) = 0
+        assert!(approx_eq_eps(body.torque(), 2.0 + 0.0, 1e-5)); // (1,0) x (5,0) = 0
 
         body.clear_accumulators();
         assert_eq!(body.force(), Vec2::zero());
@@ -758,20 +824,27 @@ mod tests {
     }
 
     #[test]
-    fn test_shape() {
+    fn test_clone_drops_user_data() {
         let handle = BodyHandle::new(1, 0);
         let mut body = Body::new_dynamic(handle);
+        body.set_user_data(42_i32);
+        body.set_mass_properties(2.0, 3.0);
 
-        assert!(!body.has_shape());
-        assert!(body.shape().is_none());
+        let cloned = body.clone();
 
-        let circle = Shape::Circle(crate::shapes::Circle::new(5.0));
-        body.set_shape(circle);
-        assert!(body.has_shape());
-        assert!(body.shape().is_some());
+        assert_eq!(cloned.mass(), 2.0);
+        assert_eq!(cloned.inertia(), 3.0);
+        assert!(cloned.user_data::<i32>().is_none());
+        assert_eq!(*body.user_data::<i32>().unwrap(), 42);
+    }
 
-        body.remove_shape();
-        assert!(!body.has_shape());
+    #[test]
+    fn test_debug_output() {
+        let handle = BodyHandle::new(1, 0);
+        let body = Body::new_dynamic(handle);
+        let text = format!("{body:?}");
+        assert!(text.contains("Body"));
+        assert!(text.contains("Dynamic"));
     }
 
     #[test]

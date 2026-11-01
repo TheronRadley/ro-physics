@@ -145,10 +145,10 @@ mod tests {
 
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 0 + 1*0.1 = 0.1
-        assert!(approx_eq(body.linear_velocity().x, 0.1, 1e-5));
+        assert!(approx_eq_eps(body.linear_velocity().x, 0.1, 1e-5));
         
         // x = x0 + v*dt = 0 + 0.1*0.1 = 0.01
-        assert!(approx_eq(body.position().x, 0.01, 1e-5));
+        assert!(approx_eq_eps(body.position().x, 0.01, 1e-5));
     }
 
     #[test]
@@ -168,11 +168,11 @@ mod tests {
         integrator.integrate(&mut body, gravity, dt);
 
         // x = x0 + v*dt = 0 + 1*0.1 = 0.1
-        assert!(approx_eq(body.position().x, 0.1, 1e-5));
+        assert!(approx_eq_eps(body.position().x, 0.1, 1e-5));
         
         // F = ma => a = F/m = 10/10 = 1
         // v = v0 + a*dt = 1 + 1*0.1 = 1.1
-        assert!(approx_eq(body.linear_velocity().x, 1.1, 1e-5));
+        assert!(approx_eq_eps(body.linear_velocity().x, 1.1, 1e-5));
     }
 
     #[test]
@@ -218,7 +218,7 @@ mod tests {
         integrator.integrate(&mut body, gravity, dt);
 
         // v = v0 * (1 - damping) = 10 * 0.5 = 5
-        assert!(approx_eq(body.linear_velocity().x, 5.0, 1e-5));
+        assert!(approx_eq_eps(body.linear_velocity().x, 5.0, 1e-5));
     }
 
     #[test]

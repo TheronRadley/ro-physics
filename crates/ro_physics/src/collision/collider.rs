@@ -191,6 +191,19 @@ impl Collider {
         &self.shape
     }
 
+    /// A characteristic length of the collider, used by continuous collision
+    /// detection to decide whether a body can tunnel through it in one step
+    ///
+    /// This is the half diagonal of the collider's local AABB, i.e. roughly the
+    /// radius of a disc that encloses the shape.
+    #[inline]
+    #[must_use]
+    pub fn characteristic_size(&self) -> f32 {
+        let aabb = self.shape.local_aabb();
+        let half = aabb.half_extents();
+        half.length().max(crate::constants::EPSILON)
+    }
+
     /// Get the shape mutably
     #[inline]
     #[must_use]
@@ -525,7 +538,11 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = 1e-6) -> bool {
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= 1e-6
+    }
+
+    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
         (a - b).abs() <= epsilon
     }
 }

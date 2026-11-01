@@ -33,13 +33,6 @@ impl SleepingSystem {
         }
     }
 
-    /// Create a new sleeping system with default configuration
-    #[inline]
-    #[must_use]
-    pub fn default() -> Self {
-        Self::new(SleepingConfig::default())
-    }
-
     /// Get the configuration
     #[inline]
     #[must_use]
@@ -117,7 +110,7 @@ impl SleepingSystem {
 
 impl Default for SleepingSystem {
     fn default() -> Self {
-        Self::default()
+        Self::new(SleepingConfig::default())
     }
 }
 

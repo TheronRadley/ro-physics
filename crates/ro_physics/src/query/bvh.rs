@@ -97,7 +97,9 @@ impl Bvh {
         indices.sort_by(|&a, &b| {
             let a_center = self.collider_aabbs[a].center();
             let b_center = self.collider_aabbs[b].center();
-            a_center[axis].partial_cmp(&b_center[axis]).unwrap()
+            // `total_cmp` gives a total order for floats, so NaN can never
+            // panic here the way `partial_cmp(..).unwrap()` would.
+            a_center[axis].total_cmp(&b_center[axis])
         });
     }
 
@@ -311,7 +313,7 @@ impl Bvh {
         }
 
         // Sort by distance
-        results.sort_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+        results.sort_by(|a, b| a.2.total_cmp(&b.2));
         results
     }
 

@@ -160,7 +160,11 @@ mod tests {
 
     // Helper function for tests
     #[allow(dead_code)]
-    fn approx_eq(a: f32, b: f32, epsilon: f32 = EPSILON) -> bool {
+    fn approx_eq(a: f32, b: f32) -> bool {
+        (a - b).abs() <= crate::constants::EPSILON
+    }
+
+    fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
         (a - b).abs() <= epsilon
     }
 }
