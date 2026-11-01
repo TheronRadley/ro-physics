@@ -1046,7 +1046,6 @@ mod tests {
         assert!(body_str.contains("Dynamic"));
     }
 
-
     #[test]
     fn test_setters_reject_non_finite_values() {
         let mut body = Body::new_dynamic(BodyHandle::new(1, 0));

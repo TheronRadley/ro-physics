@@ -302,6 +302,7 @@ fn test_clear_world() {
     world.clear();
     assert_eq!(world.body_count(), 0);
     assert_eq!(world.collider_count(), 0);
+}
 
 #[test]
 fn test_invalid_input_is_refused_instead_of_panicking() {
@@ -368,7 +369,7 @@ fn test_world_config_sanitizes_non_finite_values() {
         ..WorldConfig::default()
     };
 
-    let sanitized = config.sanitize();
+    let sanitized = config.clone().sanitize();
 
     assert_eq!(sanitized.gravity, Vec2::zero());
     assert!(sanitized.solver_config.baumgarte_factor.is_finite());
@@ -391,8 +392,8 @@ fn test_world_config_sanitizes_non_finite_values() {
     assert!(!collider.is_null());
 
     world.step(1.0 / 60.0);
-    assert!(world
-        .get_body(body)
-        .is_some_and(|body| body.position().is_finite()));
-}
+
+    let body = world.get_body(body).expect("the body still exists");
+    assert!(body.position().is_finite());
+    assert!(body.linear_velocity().is_finite());
 }

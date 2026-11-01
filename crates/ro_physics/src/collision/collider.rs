@@ -559,7 +559,6 @@ mod tests {
         assert!(collider_str.contains("Circle"));
     }
 
-
     #[test]
     fn test_material_setters_reject_non_finite_values() {
         let mut collider = Collider::new(
