@@ -64,7 +64,18 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        run: cargo test --workspace --all --all-features
+        run: |
+          set -o pipefail
+          cargo test --workspace --all --all-features 2>&1 | tee test-output.txt
+
+      # Job logs are not readable for this repository, so the output has to be
+      # uploaded to be of any use when one platform misbehaves.
+      - name: Upload the test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log-${{ matrix.os }}
+          path: test-output.txt
 
   bench:
     name: Benchmarks

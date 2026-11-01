@@ -15,8 +15,10 @@ use ro_physics::prelude::*;
 fn build_world(positions: &[(f32, f32)], radii: &[f32]) -> World {
     let mut world = World::with_gravity(Vec2::new(0.0, -9.81));
 
+    // Wide enough that nothing can be squeezed off the edge: this test is
+    // about bodies staying put, not about things rolling off a ledge
     let ground = world.create_static_body(Transform::new(Vec2::new(0.0, -10.0), Rot2::identity()));
-    let _ = world.add_box(ground, Vec2::new(50.0, 1.0), 0.0);
+    let _ = world.add_box(ground, Vec2::new(1.0e4, 1.0), 0.0);
 
     for (position, radius) in positions.iter().zip(radii.iter()) {
         let body = world.create_dynamic_body(Transform::new(

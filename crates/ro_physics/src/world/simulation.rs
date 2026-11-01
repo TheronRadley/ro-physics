@@ -994,8 +994,15 @@ impl World {
     }
 
     /// Refresh every collider's entry in the broad-phase
+    ///
+    /// The handles are sorted first: the shape of the AABB tree depends on the
+    /// order colliders are inserted, and a `HashMap`'s iteration order differs
+    /// between two worlds that were built in exactly the same way, which would
+    /// make the pair lists — and therefore the contacts and the whole step —
+    /// differ too.
     fn update_broad_phase(&mut self) {
-        let handles: Vec<ColliderHandle> = self.collider_map.keys().copied().collect();
+        let mut handles: Vec<ColliderHandle> = self.collider_map.keys().copied().collect();
+        handles.sort_by_key(|handle| (handle.id, handle.generation));
 
         for handle in handles {
             if let Some(aabb) = self.collider_aabb(handle) {
@@ -1372,8 +1379,13 @@ impl World {
             }
         }
 
-        // Post-solve
-        for index in self.constraint_map.values().copied().collect::<Vec<_>>() {
+        // Post-solve, in the same slot order as the passes above rather than in
+        // the iteration order of `constraint_map`
+        for handle in &handles {
+            let Some(index) = self.constraint_map.get(handle).copied() else {
+                continue;
+            };
+
             if let Some(constraint) = self.constraints[index].as_mut() {
                 if constraint.is_enabled() {
                     constraint.post_solve();
