@@ -13,7 +13,6 @@ use crate::constants::EPSILON;
 
 #[test]
 fn test_toi_circle_circle_identical_positions() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
@@ -37,7 +36,6 @@ fn test_toi_circle_circle_identical_positions() {
 
 #[test]
 fn test_toi_circle_circle_exact_contact() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
@@ -61,7 +59,6 @@ fn test_toi_circle_circle_exact_contact() {
 
 #[test]
 fn test_toi_circle_circle_parallel_motion() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
@@ -83,7 +80,6 @@ fn test_toi_circle_circle_parallel_motion() {
 
 #[test]
 fn test_toi_circle_circle_perpendicular_motion() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
@@ -107,7 +103,6 @@ fn test_toi_circle_circle_perpendicular_motion() {
 
 #[test]
 fn test_toi_circle_circle_grazing() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
@@ -130,7 +125,6 @@ fn test_toi_circle_circle_grazing() {
 
 #[test]
 fn test_toi_circle_circle_different_radii() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(0.5);
     let circle_b = Circle::new(2.0);
@@ -153,7 +147,6 @@ fn test_toi_circle_circle_different_radii() {
 
 #[test]
 fn test_toi_circle_circle_at_max_distance() {
-    let toi = TimeOfImpact;
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);

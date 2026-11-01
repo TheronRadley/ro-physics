@@ -107,6 +107,7 @@ impl Default for ConstraintHandleGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::hash::Hasher;
 
     #[test]
     fn test_construction() {

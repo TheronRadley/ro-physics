@@ -606,7 +606,6 @@ mod tests {
 
     #[test]
     fn test_circle_circle_toi_colliding() {
-        let toi = TimeOfImpact;
         
         let circle_a = Circle::new(1.0);
         let circle_b = Circle::new(1.0);
@@ -630,7 +629,6 @@ mod tests {
 
     #[test]
     fn test_circle_circle_toi_not_moving_toward() {
-        let toi = TimeOfImpact;
         
         let circle_a = Circle::new(1.0);
         let circle_b = Circle::new(1.0);
@@ -652,7 +650,6 @@ mod tests {
 
     #[test]
     fn test_circle_circle_toi_already_overlapping() {
-        let toi = TimeOfImpact;
         
         let circle_a = Circle::new(1.0);
         let circle_b = Circle::new(1.0);

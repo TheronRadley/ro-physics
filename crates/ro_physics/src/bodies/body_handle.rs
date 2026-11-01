@@ -109,6 +109,7 @@ impl Default for BodyHandleGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::hash::Hasher;
 
     #[test]
     fn test_body_handle() {

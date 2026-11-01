@@ -93,10 +93,10 @@ fn test_momentum_conservation_single_collision() {
     
     // Create two bodies with initial velocities
     let body_a = world.create_dynamic_body(Transform::new(Vec2::new(-2.0, 0.0),Rot2::new(0.0)));
-    world.add_circle(body_a, 1.0, 1.0);
+    let _ = world.add_circle(body_a, 1.0, 1.0);
     
     let body_b = world.create_dynamic_body(Transform::new(Vec2::new(2.0, 0.0),Rot2::new(0.0)));
-    world.add_circle(body_b, 1.0, 1.0);
+    let _ = world.add_circle(body_b, 1.0, 1.0);
     
     // Set initial velocities (toward each other)
     if let Some(b) = world.get_body_mut(body_a) {
@@ -128,13 +128,13 @@ fn test_momentum_conservation_multiple_bodies() {
     
     // Create ground (static, doesn't affect momentum)
     let ground = world.create_static_body(Transform::identity());
-    world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
+    let _ = world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
     
     // Create multiple dynamic bodies
     for i in 0..5 {
         let body = world.create_dynamic_body(Transform::new(
             Vec2::new(i as f32 * 2.0 - 5.0, 5.0),Rot2::new(0.0)));
-        world.add_circle(body, 1.0, 1.0);
+        let _ = world.add_circle(body, 1.0, 1.0);
         
         if let Some(b) = world.get_body_mut(body) {
             b.set_linear_velocity(Vec2::new(
@@ -170,10 +170,10 @@ fn test_angular_momentum_conservation() {
     
     // Create two bodies with angular velocity
     let body_a = world.create_dynamic_body(Transform::identity());
-    world.add_circle(body_a, 1.0, 1.0);
+    let _ = world.add_circle(body_a, 1.0, 1.0);
     
     let body_b = world.create_dynamic_body(Transform::new(Vec2::new(3.0, 0.0),Rot2::new(0.0)));
-    world.add_circle(body_b, 1.0, 1.0);
+    let _ = world.add_circle(body_b, 1.0, 1.0);
     
     // Set angular velocities
     if let Some(b) = world.get_body_mut(body_a) {
@@ -303,7 +303,7 @@ fn test_mechanical_energy_conservation_with_gravity() {
     
     // Create a single body (no collisions, so energy should be conserved modulo gravity work)
     let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, 10.0),Rot2::new(0.0)));
-    world.add_circle(body, 1.0, 1.0);
+    let _ = world.add_circle(body, 1.0, 1.0);
     
     // Set initial velocity upward
     if let Some(b) = world.get_body_mut(body) {
@@ -343,11 +343,11 @@ fn test_deterministic_simulation() {
     for i in 0..10 {
         let body1 = world1.create_dynamic_body(Transform::new(
             Vec2::new(i as f32 * 2.0 - 5.0, 10.0),Rot2::new(0.0)));
-        world1.add_circle(body1, 1.0, 1.0);
+        let _ = world1.add_circle(body1, 1.0, 1.0);
         
         let body2 = world2.create_dynamic_body(Transform::new(
             Vec2::new(i as f32 * 2.0 - 5.0, 10.0),Rot2::new(0.0)));
-        world2.add_circle(body2, 1.0, 1.0);
+        let _ = world2.add_circle(body2, 1.0, 1.0);
         
         // Set same initial velocities
         if let Some(b) = world1.get_body_mut(body1) {
@@ -360,10 +360,10 @@ fn test_deterministic_simulation() {
     
     // Add ground to both
     let ground1 = world1.create_static_body(Transform::identity());
-    world1.add_box(ground1, Vec2::new(20.0, 0.5), 0.0);
+    let _ = world1.add_box(ground1, Vec2::new(20.0, 0.5), 0.0);
     
     let ground2 = world2.create_static_body(Transform::identity());
-    world2.add_box(ground2, Vec2::new(20.0, 0.5), 0.0);
+    let _ = world2.add_box(ground2, Vec2::new(20.0, 0.5), 0.0);
     
     // Step both worlds identically
     for _ in 0..30 {
@@ -411,7 +411,7 @@ fn test_no_nan_propagation() {
     
     // Create ground
     let ground = world.create_static_body(Transform::identity());
-    world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
+    let _ = world.add_box(ground, Vec2::new(20.0, 0.5), 0.0);
     
     // Create many bodies with random properties
     for i in 0..100 {
@@ -422,10 +422,10 @@ fn test_no_nan_propagation() {
             ),Rot2::new(0.0)));
         
         if i % 2 == 0 {
-            world.add_circle(body, 0.5 + (i as f32 % 5.0) * 0.1, 1.0);
+            let _ = world.add_circle(body, 0.5 + (i as f32 % 5.0) * 0.1, 1.0);
         } else {
             let size = 0.5 + (i as f32 % 5.0) * 0.1;
-            world.add_box(body, Vec2::new(size, size), 1.0);
+            let _ = world.add_box(body, Vec2::new(size, size), 1.0);
         }
         
         // Set random initial velocities
@@ -475,7 +475,7 @@ fn test_stable_stacking() {
     
     // Create ground
     let ground = world.create_static_body(Transform::identity());
-    world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
+    let _ = world.add_box(ground, Vec2::new(10.0, 0.5), 0.0);
     
     // Create a stack of boxes
     let mut y = 1.0;
@@ -483,7 +483,7 @@ fn test_stable_stacking() {
     
     for _ in 0..20 {
         let body = world.create_dynamic_body(Transform::new(Vec2::new(0.0, y),Rot2::new(0.0)));
-        world.add_box(body, Vec2::new(0.9, 0.9), 1.0);
+        let _ = world.add_box(body, Vec2::new(0.9, 0.9), 1.0);
         bodies.push(body);
         y += 1.0;
     }
