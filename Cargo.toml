@@ -9,7 +9,7 @@ serde = { version = "1.0", features = ["derive"] }
 
 # Graphics for demo
 winit = "0.29"
-wgpu = "0.18"
+wgpu = "0.19"
 pollster = "0.3"
 env_logger = "0.10"
 log = "0.4"
