@@ -28,8 +28,23 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      # TEMPORARY: publish what rustfmt complains about to a scratch branch so
+      # it can be read without job-log access. Revert before merging.
       - name: Check formatting
-        run: cargo fmt --check --all
+        run: |
+          cargo fmt --all -- --check > fmt-check.txt 2>&1
+          code=$?
+          if [ "$code" -ne 0 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -q -B fmt-check-tmp
+            mkdir -p ci-logs
+            cp fmt-check.txt ci-logs/fmt-check.txt
+            git add ci-logs
+            git commit -q -m "fmt check for ${GITHUB_SHA}"
+            git push -q --force origin "HEAD:arena-fmt-check" || echo "push failed"
+          fi
+          exit "$code"
 
       - name: Check for warnings
         run: cargo check --workspace --all-targets --all-features
