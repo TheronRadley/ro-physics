@@ -1,0 +1,39 @@
+name: Auto Format
+
+# Temporary helper used to run `cargo fmt` through CI (the development
+# environment has no Rust toolchain installed) and push the result back to
+# the branch. Removed once formatting is clean.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Format
+        run: cargo fmt --all
+
+      - name: Commit
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: apply cargo fmt"
+          git push origin HEAD:${{ github.ref_name }}

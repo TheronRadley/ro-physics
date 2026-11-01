@@ -1,0 +1,60 @@
+name: Dev Check
+
+# Temporary development workflow used to build and test the library inside
+# GitHub Actions while the crate is being repaired. It is removed once the
+# main `ci.yml` pipeline is green again.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["arena/**"]
+
+concurrency:
+  group: dev-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (ro_physics)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Check library
+        run: cargo check -p ro_physics --all-targets --all-features
+
+      - name: Clippy library
+        run: cargo clippy -p ro_physics --all-targets --all-features -- -D warnings
+        continue-on-error: true
+
+      - name: Test library
+        run: cargo test -p ro_physics --all-features -- --nocapture
+        continue-on-error: true
+
+  full:
+    name: Check (workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --all-features
+        continue-on-error: true
