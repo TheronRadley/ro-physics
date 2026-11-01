@@ -497,11 +497,12 @@ mod tests {
         let inertia = polygon.inertia(mass);
 
         // Polar moment of a triangle about its centroid:
-        // I = m / 18 * (a^2 + b^2 + c^2) with side lengths a, b, c.
+        // I = m / 36 * (a^2 + b^2 + c^2) with side lengths a, b, c.
+        // (m / 18 is the moment about the right-angle vertex, twice as large.)
         let a_sq = 4.0;
         let b_sq = 4.0;
         let c_sq = 8.0;
-        let expected = mass / 18.0 * (a_sq + b_sq + c_sq);
+        let expected = mass / 36.0 * (a_sq + b_sq + c_sq);
 
         assert!(
             approx_eq_eps(inertia, expected, 1e-4),
@@ -570,17 +571,28 @@ mod tests {
     fn test_support() {
         let polygon = Polygon::from_rectangle(2.0, 2.0);
 
-        // Support in positive X direction
-        let support_x = polygon.support(Vec2::new(1.0, 0.0));
-        assert_eq!(support_x, Vec2::new(1.0, -1.0));
+        // The rectangle spans [-1, 1] on both axes, so the support along an
+        // axis has a dot product of 1.0 with it. With axis aligned directions
+        // two vertices tie, and any of them is a valid support point.
+        for direction in [
+            Vec2::new(1.0, 0.0),
+            Vec2::new(-1.0, 0.0),
+            Vec2::new(0.0, 1.0),
+            Vec2::new(0.0, -1.0),
+        ] {
+            let support = polygon.support(direction);
+            let best = polygon
+                .vertices()
+                .iter()
+                .map(|vertex| vertex.dot(direction))
+                .fold(f32::NEG_INFINITY, f32::max);
 
-        // Support in negative X direction
-        let support_neg_x = polygon.support(Vec2::new(-1.0, 0.0));
-        assert_eq!(support_neg_x, Vec2::new(-1.0, 1.0));
+            assert!(approx_eq(support.dot(direction), best));
+        }
 
-        // Support in positive Y direction
-        let support_y = polygon.support(Vec2::new(0.0, 1.0));
-        assert_eq!(support_y, Vec2::new(1.0, 1.0));
+        // A diagonal direction has a single maximal vertex
+        let support = polygon.support(Vec2::new(1.0, 1.0));
+        assert_eq!(support, Vec2::new(1.0, 1.0));
     }
 
     #[test]
@@ -595,12 +607,12 @@ mod tests {
 
     #[test]
     fn test_aabb_rotated() {
-        // A square rotated by 45 degrees grows by sqrt(2).
+        // A 2x2 square rotated by 45 degrees spans 2 * sqrt(2).
         let polygon = Polygon::from_rectangle(2.0, 2.0);
         let transform = Transform::from_rotation(Rot2::new(crate::constants::PI_OVER_FOUR));
 
         let aabb = polygon.aabb(transform);
-        let expected = 2.0_f32.sqrt();
+        let expected = 2.0 * (2.0_f32).sqrt();
         assert!(approx_eq_eps(aabb.width(), expected, 1e-5));
         assert!(approx_eq_eps(aabb.height(), expected, 1e-5));
         assert!(approx_eq_eps(aabb.center().x, 0.0, 1e-6));

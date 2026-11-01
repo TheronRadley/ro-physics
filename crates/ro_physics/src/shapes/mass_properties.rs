@@ -9,7 +9,7 @@ use crate::math::Vec2;
 ///
 /// Contains the mass, inertia, and center of mass information
 /// needed for rigid-body physics.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialization", derive(serde::Serialize, serde::Deserialize))]
 pub struct MassProperties {
     /// Mass of the shape
@@ -127,6 +127,22 @@ impl MassProperties {
     }
 }
 
+impl PartialEq for MassProperties {
+    /// Compare with the usual floating point tolerance
+    ///
+    /// Masses and inertias are computed through several floating point steps,
+    /// so an exact comparison would report equal shapes as different.
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        approx_eq(self.mass, other.mass)
+            && approx_eq(self.inertia, other.inertia)
+            && approx_eq(self.inv_mass, other.inv_mass)
+            && approx_eq(self.inv_inertia, other.inv_inertia)
+            && approx_eq(self.center_of_mass.x, other.center_of_mass.x)
+            && approx_eq(self.center_of_mass.y, other.center_of_mass.y)
+    }
+}
+
 impl Default for MassProperties {
     fn default() -> Self {
         Self::static_body()
@@ -136,6 +152,7 @@ impl Default for MassProperties {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math::utils::approx_eq;
     use crate::constants::EPSILON;
 
     #[test]
@@ -207,14 +224,4 @@ mod tests {
         // This tests the PartialEq implementation
         assert_eq!(mp1, mp2);
     }
-}
-
-// Helper function for tests
-#[allow(dead_code)]
-fn approx_eq(a: f32, b: f32) -> bool {
-    (a - b).abs() <= crate::constants::EPSILON
-}
-
-fn approx_eq_eps(a: f32, b: f32, epsilon: f32) -> bool {
-    (a - b).abs() <= epsilon
 }

@@ -236,12 +236,17 @@ mod tests {
         assert!(filter1.can_collide_with(&filter2));
         assert!(!filter1.can_collide_with(&filter3));
 
-        // Test with mask
+        // Two colliders only collide when each accepts the other's category,
+        // which is what the mask bits are for
         let filter4 = Filter::new(0x0001, 0x0001 | 0x0002);
-        let filter5 = Filter::category(0x0002);
-        
+        let filter5 = Filter::new(0x0002, 0x0001 | 0x0002);
+
         assert!(filter4.can_collide_with(&filter5));
         assert!(filter5.can_collide_with(&filter4));
+
+        // Accepting category 1 is not enough on its own
+        let filter6 = Filter::new(0x0002, 0x0002);
+        assert!(!filter4.can_collide_with(&filter6));
     }
 
     #[test]

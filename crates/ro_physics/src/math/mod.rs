@@ -18,10 +18,23 @@ pub mod utils {
     use crate::constants::EPSILON;
 
     /// Check if two floating-point values are approximately equal
+    ///
+    /// The tolerance is [`EPSILON`][crate::constants::EPSILON] scaled by the
+    /// magnitude of the values, so the comparison stays meaningful for both
+    /// sub-unit and very large quantities instead of being dominated by f32
+    /// rounding on large ones.
     #[inline]
     #[must_use]
     pub fn approx_eq(a: f32, b: f32) -> bool {
-        (a - b).abs() <= EPSILON
+        // Exact equality also covers the infinities used by "invalid" AABBs,
+        // for which a difference would be NaN, while NaN still compares false.
+        if a == b {
+            return true;
+        }
+
+        let difference = (a - b).abs();
+
+        difference <= EPSILON || difference <= EPSILON * a.abs().max(b.abs())
     }
 
     /// Check if two floating-point values are equal within an explicit tolerance

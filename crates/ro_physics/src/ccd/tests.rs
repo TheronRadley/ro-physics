@@ -8,6 +8,7 @@ use crate::math::Vec2;
 use crate::shapes::{Circle, Polygon, Shape};
 
 use crate::constants::EPSILON;
+use crate::math::utils::approx_eq;
 
 // ========== TOI Edge Cases ==========
 
@@ -84,10 +85,10 @@ fn test_toi_circle_circle_perpendicular_motion() {
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
-    // Circle A moving right, Circle B moving down
+    // Circle A moving right, Circle B moving down towards the same corner
     let position_a = Vec2::zero();
     let velocity_a = Vec2::new(5.0, 0.0);
-    let position_b = Vec2::new(0.0, 5.0);
+    let position_b = Vec2::new(0.0, 2.0);
     let velocity_b = Vec2::new(0.0, -5.0);
 
     let result = TimeOfImpact::circle_circle(
@@ -146,12 +147,36 @@ fn test_toi_circle_circle_different_radii() {
 }
 
 #[test]
-fn test_toi_circle_circle_at_max_distance() {
+fn test_toi_circle_circle_just_reaches() {
 
     let circle_a = Circle::new(1.0);
     let circle_b = Circle::new(1.0);
 
-    // Circles very far apart moving toward each other
+    // Circles far apart but fast enough to meet inside one step: the gap is
+    // 98 metres and the closing speed is 120 m/s, so impact happens at 0.8167
+    let position_a = Vec2::zero();
+    let velocity_a = Vec2::new(60.0, 0.0);
+    let position_b = Vec2::new(100.0, 0.0);
+    let velocity_b = Vec2::new(-60.0, 0.0);
+
+    let result = TimeOfImpact::circle_circle(
+        &circle_a, position_a, velocity_a,
+        &circle_b, position_b, velocity_b,
+        20, 1e-4
+    );
+
+    assert!(result.is_colliding());
+    assert!((result.toi - 98.0 / 120.0).abs() < 0.01);
+}
+
+#[test]
+fn test_toi_circle_circle_out_of_range() {
+
+    let circle_a = Circle::new(1.0);
+    let circle_b = Circle::new(1.0);
+
+    // The pair closes at 20 m/s but starts 100 metres apart, so it cannot
+    // touch within the step: the TOI is reported as "no collision"
     let position_a = Vec2::zero();
     let velocity_a = Vec2::new(10.0, 0.0);
     let position_b = Vec2::new(100.0, 0.0);
@@ -163,9 +188,8 @@ fn test_toi_circle_circle_at_max_distance() {
         20, 1e-4
     );
 
-    assert!(result.is_colliding());
-    // TOI should be close to 5.0 (distance / relative speed = 100 / 20 = 5)
-    assert!((result.toi - 5.0).abs() < 0.1);
+    assert!(!result.is_colliding());
+    assert!(approx_eq(result.toi, 1.0));
 }
 
 // ========== Swept Collision Edge Cases ==========

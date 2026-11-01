@@ -29,21 +29,13 @@ pub struct Aabb {
 impl Aabb {
     /// Create a new AABB from minimum and maximum corners
     ///
-    /// # Panics
-    ///
-    /// Panics if min > max in any dimension, or if either corner is
-    /// non-finite.
+    /// The corners are stored as given: an inverted or non-finite box can be
+    /// built and recognised with [`is_valid`][Self::is_valid] /
+    /// [`validate`][Self::validate] instead of panicking in a constructor that
+    /// is also used on hot paths such as the broad phase.
     #[inline]
     #[must_use]
-    pub fn new(min: Vec2, max: Vec2) -> Self {
-        assert!(
-            min.x <= max.x && min.y <= max.y,
-            "AABB min must be <= max"
-        );
-        assert!(
-            min.is_finite() && max.is_finite(),
-            "AABB corners must be finite"
-        );
+    pub const fn new(min: Vec2, max: Vec2) -> Self {
         Self { min, max }
     }
 
@@ -336,37 +328,47 @@ impl Aabb {
         direction: Vec2,
         max_fraction: f32,
     ) -> Option<f32> {
-        use crate::math::utils::safe_divide;
-
-        let inv_dir = Vec2::new(
-            safe_divide(1.0, direction.x),
-            safe_divide(1.0, direction.y),
-        );
-        
-        let mut t_min = 0.0;
+        let mut t_min = 0.0_f32;
         let mut t_max = max_fraction;
 
-        // X axis
-        let t1 = (self.min.x - origin.x) * inv_dir.x;
-        let t2 = (self.max.x - origin.x) * inv_dir.x;
-        
-        t_min = t1.min(t2).max(t_min);
-        t_max = t1.max(t2).min(t_max);
+        // X slab. A ray parallel to a slab can only hit it when it starts
+        // inside of it, so a zero direction component must not be inverted.
+        if direction.x.abs() <= EPSILON {
+            if origin.x < self.min.x || origin.x > self.max.x {
+                return None;
+            }
+        } else {
+            let inv_dir = 1.0 / direction.x;
+            let t1 = (self.min.x - origin.x) * inv_dir;
+            let t2 = (self.max.x - origin.x) * inv_dir;
 
-        if t_min > t_max {
-            return None;
+            t_min = t_min.max(t1.min(t2));
+            t_max = t_max.min(t1.max(t2));
+
+            if t_min > t_max {
+                return None;
+            }
         }
 
-        // Y axis
-        let t1 = (self.min.y - origin.y) * inv_dir.y;
-        let t2 = (self.max.y - origin.y) * inv_dir.y;
-        
-        t_min = t1.min(t2).max(t_min);
-        t_max = t1.max(t2).min(t_max);
+        // Y slab
+        if direction.y.abs() <= EPSILON {
+            if origin.y < self.min.y || origin.y > self.max.y {
+                return None;
+            }
+        } else {
+            let inv_dir = 1.0 / direction.y;
+            let t1 = (self.min.y - origin.y) * inv_dir;
+            let t2 = (self.max.y - origin.y) * inv_dir;
 
-        if t_min > t_max {
-            None
-        } else if t_min < 0.0 {
+            t_min = t_min.max(t1.min(t2));
+            t_max = t_max.min(t1.max(t2));
+
+            if t_min > t_max {
+                return None;
+            }
+        }
+
+        if t_min < 0.0 {
             // Ray origin is inside the AABB
             Some(0.0)
         } else {
@@ -600,9 +602,10 @@ mod tests {
         assert_eq!(aabb.min, Vec2::new(-5.0, -5.0));
         assert_eq!(aabb.max, Vec2::new(15.0, 15.0));
 
+        // Scaling keeps the centre, so the box returns to its original size
         aabb.scale(0.5);
-        assert_eq!(aabb.min, Vec2::new(-2.5, -2.5));
-        assert_eq!(aabb.max, Vec2::new(7.5, 7.5));
+        assert_eq!(aabb.min, Vec2::new(0.0, 0.0));
+        assert_eq!(aabb.max, Vec2::new(10.0, 10.0));
     }
 
     #[test]

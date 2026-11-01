@@ -65,6 +65,7 @@ pub fn circle_circle_collision(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::math::utils::approx_eq;
 
     #[test]
     fn test_overlapping_circles() {
@@ -143,12 +144,11 @@ mod tests {
         )
         .expect("concentric circles overlap");
 
-        // Penetration is the difference of the radii and the normal is finite
-        assert!(approx_eq(manifold.contact(0).penetration(), 0.5));
+        // Both centres coincide, so the small circle sits entirely inside the
+        // big one: separating them takes the sum of both radii. The normal has
+        // no geometric meaning here, but it must stay finite and deterministic.
+        assert!(approx_eq(manifold.contact(0).penetration(), 1.5));
         assert!(manifold.normal().is_finite());
-    }
-
-    fn approx_eq(a: f32, b: f32) -> bool {
-        (a - b).abs() <= crate::constants::EPSILON
+        assert_eq!(manifold.normal(), Vec2::unit_x());
     }
 }

@@ -38,9 +38,11 @@ impl Integrator for SemiImplicitEuler {
         let new_linear_velocity = body.linear_velocity() + linear_acceleration * dt;
         let new_angular_velocity = body.angular_velocity() + angular_acceleration * dt;
 
-        // Apply damping
-        let linear_velocity = new_linear_velocity * (1.0 - body.linear_damping()).max(0.0);
-        let angular_velocity = new_angular_velocity * (1.0 - body.angular_damping()).max(0.0);
+        // Time-correct damping: v /= (1 + damping * dt). Unlike a plain
+        // `v * (1 - damping)` this is stable for any damping and timestep.
+        let linear_velocity = new_linear_velocity / (1.0 + body.linear_damping().max(0.0) * dt);
+        let angular_velocity =
+            new_angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
 
         // Update position
         let new_position = body.position() + linear_velocity * dt;
@@ -84,9 +86,9 @@ impl Integrator for SymplecticEuler {
         let linear_velocity = body.linear_velocity() + total_force * inv_mass * dt;
         let angular_velocity = body.angular_velocity() + body.torque() * inv_inertia * dt;
 
-        // Apply damping
-        let linear_velocity = linear_velocity * (1.0 - body.linear_damping()).max(0.0);
-        let angular_velocity = angular_velocity * (1.0 - body.angular_damping()).max(0.0);
+        // Time-correct damping: v /= (1 + damping * dt)
+        let linear_velocity = linear_velocity / (1.0 + body.linear_damping().max(0.0) * dt);
+        let angular_velocity = angular_velocity / (1.0 + body.angular_damping().max(0.0) * dt);
 
         // Update body state
         body.set_position(new_position);
@@ -199,7 +201,14 @@ mod tests {
 
         assert_eq!(bodies.len(), 2);
         assert!(bodies[0].as_ref().unwrap().linear_velocity().x > 0.0);
-        assert!(bodies[1].as_ref().unwrap().linear_velocity().y > 0.0);
+
+        // Body 2 only pushes with 5 N on a mass of 5 kg, i.e. 1 m/s^2, which
+        // gravity (9.81 m/s^2) easily wins, so it still ends up moving down.
+        assert!(approx_eq_eps(
+            bodies[1].as_ref().unwrap().linear_velocity().y,
+            (1.0 - 9.81) * 0.1,
+            1e-5
+        ));
     }
 
     #[test]
@@ -217,8 +226,8 @@ mod tests {
 
         integrator.integrate(&mut body, gravity, dt);
 
-        // v = v0 * (1 - damping) = 10 * 0.5 = 5
-        assert!(approx_eq_eps(body.linear_velocity().x, 5.0, 1e-5));
+        // v = v0 / (1 + damping * dt) = 10 / 1.05
+        assert!(approx_eq_eps(body.linear_velocity().x, 10.0 / 1.05, 1e-5));
     }
 
     #[test]

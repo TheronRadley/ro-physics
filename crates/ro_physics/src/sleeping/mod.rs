@@ -67,8 +67,17 @@ impl SleepingSystem {
     }
 
     /// Update the sleeping state for a body
+    ///
+    /// `dt` is the timestep of the update, so the sleep timer accumulates real
+    /// seconds instead of assuming a fixed frame rate.
     #[inline]
-    pub fn update_body(&mut self, handle: BodyHandle, linear_velocity: Vec2, angular_velocity: f32) {
+    pub fn update_body(
+        &mut self,
+        handle: BodyHandle,
+        linear_velocity: Vec2,
+        angular_velocity: f32,
+        dt: f32,
+    ) {
         let state = self.sleeping.entry(handle).or_insert_with(|| SleepState::new());
 
         // Check if the body is moving
@@ -82,9 +91,9 @@ impl SleepingSystem {
             state.sleeping = false;
             state.sleep_timer = 0.0;
         } else if !state.sleeping {
-            // Body is not moving, increment sleep timer
-            state.sleep_timer += 1.0 / 60.0; // Assuming 60 FPS
-            
+            // Body is not moving, advance the sleep timer
+            state.sleep_timer += dt.max(0.0);
+
             // Check if we should sleep
             if state.sleep_timer >= self.config.sleep_time {
                 state.sleeping = true;
@@ -178,24 +187,25 @@ mod tests {
                 .with_sleep_time(1.0),
         );
 
+        const STEP: f32 = 1.0 / 60.0;
         let handle = BodyHandle::new(1, 0);
 
         // Body is moving
-        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0);
+        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0, STEP);
         assert!(!system.is_sleeping(handle));
 
         // Body is not moving, but sleep timer not expired
         for _ in 0..59 {
-            system.update_body(handle, Vec2::zero(), 0.0);
+            system.update_body(handle, Vec2::zero(), 0.0, STEP);
         }
         assert!(!system.is_sleeping(handle));
 
         // Body is not moving, sleep timer expired
-        system.update_body(handle, Vec2::zero(), 0.0);
+        system.update_body(handle, Vec2::zero(), 0.0, STEP);
         assert!(system.is_sleeping(handle));
 
         // Body starts moving again
-        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0);
+        system.update_body(handle, Vec2::new(0.2, 0.0), 0.0, STEP);
         assert!(!system.is_sleeping(handle));
     }
 

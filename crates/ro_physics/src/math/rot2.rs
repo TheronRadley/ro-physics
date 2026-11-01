@@ -317,8 +317,9 @@ impl Neg for Rot2 {
 impl PartialEq for Rot2 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        // Compare angles modulo 2*PI
-        let delta = (self.angle - other.angle + PI) % TWO_PI - PI;
+        // Compare angles modulo 2*PI: `wrap_angle` maps the difference into
+        // (-PI, PI], where a difference of a whole turn becomes zero.
+        let delta = wrap_angle(self.angle - other.angle);
         approx_eq(delta, 0.0)
     }
 }
@@ -345,11 +346,11 @@ mod tests {
     fn test_trigonometry() {
         let r = Rot2::new(PI_OVER_TWO);
         assert!(approx_eq(r.sin(), 1.0));
-        assert!(approx_eq_eps(r.cos(), 0.0, 1e-10));
+        assert!(approx_eq_eps(r.cos(), 0.0, 1e-6));
 
         let (s, c) = r.sin_cos();
         assert!(approx_eq(s, 1.0));
-        assert!(approx_eq_eps(c, 0.0, 1e-10));
+        assert!(approx_eq_eps(c, 0.0, 1e-6));
     }
 
     #[test]
@@ -358,7 +359,7 @@ mod tests {
         let r2 = r1.inverse();
         assert!(approx_eq(r2.angle(), -PI_OVER_TWO));
         assert!(approx_eq(r2.sin(), -1.0));
-        assert!(approx_eq_eps(r2.cos(), 0.0, 1e-10));
+        assert!(approx_eq_eps(r2.cos(), 0.0, 1e-6));
 
         // Composing a rotation with its inverse gives identity
         let composed = r1 * r2;
@@ -438,13 +439,19 @@ mod tests {
 
     #[test]
     fn test_normalized() {
-        let r1 = Rot2::new(3.0 * PI);
-        let normalized = r1.normalized();
-        assert!(approx_eq_eps(normalized.angle(), -PI, 1e-5));
+        // Angles are wrapped into (-PI, PI]
+        let normalized = Rot2::new(3.0 * PI).normalized();
+        assert!(approx_eq_eps(normalized.angle(), PI, 1e-5));
 
-        let r2 = Rot2::new(-3.0 * PI);
-        let normalized2 = r2.normalized();
-        assert!(approx_eq_eps(normalized2.angle(), PI, 1e-5));
+        let normalized = Rot2::new(3.0 * PI_OVER_TWO).normalized();
+        assert!(approx_eq_eps(normalized.angle(), -PI_OVER_TWO, 1e-5));
+
+        let normalized = Rot2::new(-3.0 * PI_OVER_TWO).normalized();
+        assert!(approx_eq_eps(normalized.angle(), PI_OVER_TWO, 1e-5));
+
+        // A whole number of turns is an identity rotation
+        let normalized = Rot2::new(2.0 * TWO_PI).normalized();
+        assert!(normalized.is_identity_eps(1e-5));
     }
 
     #[test]

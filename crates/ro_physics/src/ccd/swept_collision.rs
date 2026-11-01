@@ -52,6 +52,13 @@ impl SweptCollisionDetector {
             return None;
         }
 
+        // CCD exists to stop fast movers from passing through each other; when
+        // neither body can move there is nothing to sweep, and any existing
+        // overlap is the narrow phase's job.
+        if !body_a.is_dynamic() && !body_b.is_dynamic() {
+            return None;
+        }
+
         let shape_a = collider_a.shape();
         let shape_b = collider_b.shape();
 
@@ -166,17 +173,20 @@ impl SweptCollisionDetector {
             return false;
         }
 
-        // Calculate distance moved by each body
-        let distance_a = body_a.linear_velocity().length() * dt;
-        let distance_b = body_b.linear_velocity().length() * dt;
+        if !(dt > 0.0) || (!body_a.is_dynamic() && !body_b.is_dynamic()) {
+            return false;
+        }
 
-        // Calculate characteristic size of colliders
-        let size_a = collider_a.characteristic_size();
-        let size_b = collider_b.characteristic_size();
+        // What matters is how far the pair moves relative to each other: a
+        // collision is missed when that displacement is larger than the
+        // smaller of the two shapes, because the pair can then step straight
+        // through its own contact configuration.
+        let relative_distance = (body_b.linear_velocity() - body_a.linear_velocity()).length() * dt;
+        let smallest_size = collider_a
+            .characteristic_size()
+            .min(collider_b.characteristic_size());
 
-        // If either body moves more than the combined size in one step, tunneling is possible
-        let combined_size = size_a + size_b;
-        distance_a > combined_size || distance_b > combined_size
+        relative_distance > smallest_size
     }
 }
 

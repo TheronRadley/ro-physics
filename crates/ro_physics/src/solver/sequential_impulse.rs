@@ -389,7 +389,7 @@ fn two_bodies_mut(
     index_a: usize,
     index_b: usize,
 ) -> Option<(&mut Body, &mut Body)> {
-    if index_a == index_b {
+    if index_a == index_b || index_a >= bodies.len() || index_b >= bodies.len() {
         return None;
     }
 
@@ -526,10 +526,15 @@ mod tests {
         a.set_angular_velocity(2.0);
         let b = dynamic(BodyHandle::new(2, 0), Vec2::zero());
 
-        // r = (1, 0): omega x r = (0, 2)
+        // The result is the velocity of B relative to A, so the rotation of A
+        // shows up with a negative sign: r = (1, 0) gives omega x r = (0, 2)
         let velocity = relative_velocity(&a, &b, Vec2::new(1.0, 0.0), Vec2::zero());
 
         assert!((velocity.x).abs() < 1e-5);
+        assert!((velocity.y + 2.0).abs() < 1e-5);
+
+        // Swapping the bodies flips the sign
+        let velocity = relative_velocity(&b, &a, Vec2::zero(), Vec2::new(1.0, 0.0));
         assert!((velocity.y - 2.0).abs() < 1e-5);
     }
 

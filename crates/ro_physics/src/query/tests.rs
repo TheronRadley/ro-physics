@@ -4,6 +4,7 @@ use super::*;
 use crate::bodies::BodyHandle;
 use crate::collision::ColliderHandle;
 use crate::geometry::Aabb;
+use crate::math::utils::approx_eq;
 use crate::math::{Rot2, Transform, Vec2};
 use crate::world::World;
 
@@ -377,14 +378,15 @@ fn test_ray_cast_tangent() {
     let body = world.create_static_body(Transform::identity());
     world.add_circle(body, 2.0, 1.0);
 
-    // Ray tangent to the circle
-    let ray = Ray::new(Vec2::new(0.0, 2.0), Vec2::new(1.0, 0.0));
+    // Ray along the tangent line of the circle, starting beside it
+    let ray = Ray::new(Vec2::new(-5.0, 2.0), Vec2::new(1.0, 0.0));
     let result = world.ray_cast(ray, 100.0);
 
-    // Tangent ray should hit the circle
+    // Tangent ray should graze the circle at x = 0
     assert!(result.is_some());
     let hit = result.unwrap();
     assert!(hit.distance > 0.0);
+    assert!(approx_eq(hit.distance, 5.0));
 }
 
 #[test]

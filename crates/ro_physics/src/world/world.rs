@@ -1378,12 +1378,17 @@ impl World {
     /// Notify event handlers
     fn notify_event_handlers(&mut self) {
         if self.event_handlers.is_empty() {
-            self.events.clear();
+            // The events stay available through [`World::events`] until the
+            // next step clears them; only the handlers consume them.
             return;
         }
 
-        for event in self.events.drain(..) {
-            for handler in &mut self.event_handlers {
+        // Copy the events out first: the handlers are borrowed mutably while
+        // they are called, which is not possible while `events` is borrowed.
+        let events = self.events.clone();
+
+        for event in events {
+            for handler in self.event_handlers.iter_mut() {
                 handler.on_collision(event);
             }
         }
@@ -1831,9 +1836,9 @@ mod tests {
         world.step(1.0 / 60.0);
         assert!(world.events().is_empty());
 
-        // Push them together: one Started event
-        world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(10.0, 0.0));
-        world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-10.0, 0.0));
+        // Push them together: one Started event, then persisted ones
+        world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(20.0, 0.0));
+        world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-20.0, 0.0));
 
         let mut started = 0;
         for _ in 0..10 {

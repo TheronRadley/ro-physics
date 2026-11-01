@@ -136,7 +136,7 @@ impl Circle {
     #[inline]
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        self.radius >= 0.0 && self.radius.is_finite()
+        self.radius >= 0.0 && self.radius.is_finite() && self.radius < crate::constants::MAX_FLOAT
     }
 
     /// Validate the circle
