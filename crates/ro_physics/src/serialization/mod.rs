@@ -8,6 +8,14 @@ use serde::{Deserialize, Serialize};
 pub mod utils {
     use super::*;
 
+    /// Maximum number of bytes `from_binary` will decode
+    ///
+    /// bincode trusts the length prefix of a sequence, so a hand-crafted
+    /// payload could claim gigabytes of elements and make the decoder allocate
+    /// them before it notices the input is short. The limit makes that an
+    /// error instead of an out-of-memory abort.
+    pub const MAX_BINARY_INPUT: u64 = 64 * 1024 * 1024;
+
     /// Serialize a type to JSON
     #[inline]
     pub fn to_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
@@ -39,15 +47,36 @@ pub mod utils {
     }
 
     /// Serialize a type to binary
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `value` cannot be encoded, or when the encoding
+    /// would exceed [`MAX_BINARY_INPUT`] bytes.
     #[inline]
     pub fn to_binary<T: Serialize>(value: &T) -> Result<Vec<u8>, bincode::Error> {
-        bincode::serialize(value)
+        use bincode::Options;
+
+        bincode::options()
+            .with_limit(MAX_BINARY_INPUT)
+            .serialize(value)
     }
 
     /// Deserialize a type from binary
+    ///
+    /// The decoder is limited to [`MAX_BINARY_INPUT`] bytes so that an
+    /// untrusted length prefix cannot make it allocate more than that.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `bytes` is not valid bincode for `T`, or when
+    /// decoding it would exceed the limit.
     #[inline]
     pub fn from_binary<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T, bincode::Error> {
-        bincode::deserialize(bytes)
+        use bincode::Options;
+
+        bincode::options()
+            .with_limit(MAX_BINARY_INPUT)
+            .deserialize(bytes)
     }
 }
 
@@ -91,5 +120,14 @@ mod tests {
 
         let deserialized: Vec2 = from_binary(&bytes).unwrap();
         assert_eq!(deserialized, vec);
+    }
+
+    #[test]
+    fn test_from_binary_refuses_a_lying_length_prefix() {
+        // A sequence header that claims far more elements than the input can
+        // hold: this must be rejected, not allocated.
+        let bytes = u32::MAX.to_le_bytes();
+        let result = from_binary::<Vec<f32>>(&bytes);
+        assert!(result.is_err());
     }
 }

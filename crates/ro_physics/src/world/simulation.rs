@@ -112,14 +112,23 @@ impl World {
         // keeps NaN out of the simulation without making the fields private.
         let config = config.sanitize();
 
+        // The limits are bounds on the simulation, not allocation requests:
+        // reserving `usize::MAX` bodies up front would abort the process
+        // instead of simply running out of room later.
+        const MAX_PREALLOCATION: usize = 1 << 16;
+        let body_capacity = config.max_bodies.min(MAX_PREALLOCATION);
+        let collider_capacity = config.max_colliders.min(MAX_PREALLOCATION);
+        let constraint_capacity = config.max_constraints.min(MAX_PREALLOCATION);
+        let contact_capacity = config.max_contacts.min(MAX_PREALLOCATION);
+
         Self {
-            broad_phase: BroadPhase::new(BroadPhaseConfig::new(config.max_colliders)),
+            broad_phase: BroadPhase::new(BroadPhaseConfig::new(collider_capacity)),
             narrow_phase: NarrowPhase::new(NarrowPhaseConfig::default()),
             contact_solver: ContactSolver::new(config.solver_config),
             swept_detector: SweptCollisionDetector::new(config.ccd_config),
-            bodies: Vec::with_capacity(config.max_bodies),
-            colliders: Vec::with_capacity(config.max_colliders),
-            constraints: Vec::with_capacity(config.max_constraints),
+            bodies: Vec::with_capacity(body_capacity),
+            colliders: Vec::with_capacity(collider_capacity),
+            constraints: Vec::with_capacity(constraint_capacity),
             body_map: HashMap::new(),
             collider_map: HashMap::new(),
             constraint_map: HashMap::new(),
@@ -134,7 +143,7 @@ impl World {
             event_handlers: Vec::new(),
             time: 0.0,
             frame_count: 0,
-            manifolds: Vec::with_capacity(config.max_contacts),
+            manifolds: Vec::with_capacity(contact_capacity),
             touching_pairs: HashSet::new(),
             events: Vec::new(),
             config,

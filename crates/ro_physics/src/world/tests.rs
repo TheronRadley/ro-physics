@@ -395,3 +395,26 @@ fn test_world_config_sanitizes_non_finite_values() {
     assert!(body.position().is_finite());
     assert!(body.linear_velocity().is_finite());
 }
+
+#[test]
+fn test_absurd_limits_do_not_become_allocations() {
+    let config = WorldConfig {
+        max_bodies: usize::MAX,
+        max_colliders: usize::MAX,
+        max_contacts: usize::MAX,
+        max_constraints: usize::MAX,
+        ..WorldConfig::default()
+    };
+
+    // Using those limits as allocation hints would abort the process here
+    let mut world = World::new(config);
+    assert_eq!(world.body_count(), 0);
+
+    let body = world.create_dynamic_body(Transform::identity());
+    assert!(!body.is_null());
+    assert!(!world.add_circle(body, 1.0, 1.0).is_null());
+
+    world.step(1.0 / 60.0);
+    assert_eq!(world.body_count(), 1);
+    assert_eq!(world.collider_count(), 1);
+}

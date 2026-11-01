@@ -346,7 +346,9 @@ impl Body {
     /// Set the linear damping
     #[inline]
     pub fn set_linear_damping(&mut self, damping: f32) {
-        self.linear_damping = damping.clamp(0.0, 1.0);
+        // `f32::clamp` returns NaN when it is handed NaN, so the value has to
+        // be checked before it is clamped rather than after.
+        self.linear_damping = finite_or(damping, self.linear_damping).clamp(0.0, 1.0);
     }
 
     /// Get the angular damping
@@ -359,7 +361,7 @@ impl Body {
     /// Set the angular damping
     #[inline]
     pub fn set_angular_damping(&mut self, damping: f32) {
-        self.angular_damping = damping.clamp(0.0, 1.0);
+        self.angular_damping = finite_or(damping, self.angular_damping).clamp(0.0, 1.0);
     }
 
     /// Get the gravity scale
