@@ -544,10 +544,10 @@ impl RevoluteJoint {
         };
 
         if body_a.is_dynamic() {
-            body_a.add_impulse_at_point(-impulse, anchor_a);
+            body_a.add_impulse_at_point_no_wake(-impulse, anchor_a);
         }
         if body_b.is_dynamic() {
-            body_b.add_impulse_at_point(impulse, anchor_b);
+            body_b.add_impulse_at_point_no_wake(impulse, anchor_b);
         }
 
         impulse
@@ -582,10 +582,10 @@ impl RevoluteJoint {
         }
 
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
 
         impulse
@@ -616,10 +616,10 @@ impl RevoluteJoint {
 
         // Apply impulse
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
 
         impulse

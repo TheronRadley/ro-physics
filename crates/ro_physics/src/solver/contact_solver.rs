@@ -175,10 +175,10 @@ pub mod utils {
         contact_point: Vec2,
     ) {
         if body_a.is_dynamic() {
-            body_a.add_impulse_at_point(-normal * impulse, contact_point);
+            body_a.add_impulse_at_point_no_wake(-normal * impulse, contact_point);
         }
         if body_b.is_dynamic() {
-            body_b.add_impulse_at_point(normal * impulse, contact_point);
+            body_b.add_impulse_at_point_no_wake(normal * impulse, contact_point);
         }
     }
 }

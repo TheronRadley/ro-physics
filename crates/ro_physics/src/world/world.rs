@@ -1108,8 +1108,8 @@ impl World {
             linear /= 1.0 + linear_damping * dt;
             angular /= 1.0 + angular_damping * dt;
 
-            body.set_linear_velocity(linear);
-            body.set_angular_velocity(angular);
+            body.set_linear_velocity_no_wake(linear);
+            body.set_angular_velocity_no_wake(angular);
             body.clear_accumulators();
         }
     }
@@ -1124,8 +1124,8 @@ impl World {
             let position = body.position() + body.linear_velocity() * dt;
             let rotation = body.rotation() + Rot2::new(body.angular_velocity() * dt);
 
-            body.set_position(position);
-            body.set_rotation(rotation);
+            body.set_position_no_wake(position);
+            body.set_rotation_no_wake(rotation);
         }
     }
 
@@ -1843,21 +1843,26 @@ mod tests {
         world.step(1.0 / 60.0);
         assert!(world.events().is_empty());
 
-        // Push them together: one Started event, then persisted ones
-        world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(20.0, 0.0));
-        world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-20.0, 0.0));
-
+        // Keep pushing them together: one Started event, then persisted ones
         let mut started = 0;
+        let mut persisted = 0;
         for _ in 0..10 {
+            world.get_body_mut(a).expect("a").set_linear_velocity(Vec2::new(5.0, 0.0));
+            world.get_body_mut(b).expect("b").set_linear_velocity(Vec2::new(-5.0, 0.0));
+
             world.step(1.0 / 60.0);
-            started += world
-                .events()
-                .iter()
-                .filter(|event| event.event_type == CollisionEventType::Started)
-                .count();
+
+            for event in world.events() {
+                match event.event_type {
+                    CollisionEventType::Started => started += 1,
+                    CollisionEventType::Persisted => persisted += 1,
+                    CollisionEventType::Ended => {}
+                }
+            }
         }
 
         assert_eq!(started, 1, "exactly one Started event expected");
+        assert!(persisted > 0, "the contact should then persist");
         assert!(world
             .events()
             .iter()

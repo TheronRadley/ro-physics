@@ -344,10 +344,10 @@ impl SequentialImpulseSolver {
                 let shift_b = constraint.normal * (correction * inv_mass_b / total_inv_mass);
 
                 if body_a.is_dynamic() {
-                    body_a.set_position(body_a.position() + shift_a);
+                    body_a.set_position_no_wake(body_a.position() + shift_a);
                 }
                 if body_b.is_dynamic() {
-                    body_b.set_position(body_b.position() + shift_b);
+                    body_b.set_position_no_wake(body_b.position() + shift_b);
                 }
 
                 constraint.penetration -= correction;
@@ -447,15 +447,15 @@ fn perpendicular(r: Vec2) -> Vec2 {
 #[inline]
 fn apply_impulse(body_a: &mut Body, body_b: &mut Body, ra: Vec2, rb: Vec2, impulse: Vec2) {
     if body_a.is_dynamic() {
-        body_a.set_linear_velocity(body_a.linear_velocity() - impulse * body_a.inv_mass());
-        body_a.set_angular_velocity(
+        body_a.set_linear_velocity_no_wake(body_a.linear_velocity() - impulse * body_a.inv_mass());
+        body_a.set_angular_velocity_no_wake(
             body_a.angular_velocity() - ra.cross(impulse) * body_a.inv_inertia(),
         );
     }
 
     if body_b.is_dynamic() {
-        body_b.set_linear_velocity(body_b.linear_velocity() + impulse * body_b.inv_mass());
-        body_b.set_angular_velocity(
+        body_b.set_linear_velocity_no_wake(body_b.linear_velocity() + impulse * body_b.inv_mass());
+        body_b.set_angular_velocity_no_wake(
             body_b.angular_velocity() + rb.cross(impulse) * body_b.inv_inertia(),
         );
     }

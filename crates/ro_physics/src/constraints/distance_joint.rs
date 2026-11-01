@@ -431,12 +431,12 @@ impl DistanceJoint {
 
         // Apply to body A
         if body_a.is_dynamic() {
-            body_a.add_impulse_at_point(-direction * impulse, anchor_a);
+            body_a.add_impulse_at_point_no_wake(-direction * impulse, anchor_a);
         }
 
         // Apply to body B
         if body_b.is_dynamic() {
-            body_b.add_impulse_at_point(direction * impulse, anchor_b);
+            body_b.add_impulse_at_point_no_wake(direction * impulse, anchor_b);
         }
     }
 }

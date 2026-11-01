@@ -553,10 +553,10 @@ impl MotorJoint {
         }
 
         if body_a.is_dynamic() {
-            body_a.add_impulse(-impulse);
+            body_a.add_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_impulse(impulse);
+            body_b.add_impulse_no_wake(impulse);
         }
     }
 
@@ -568,10 +568,10 @@ impl MotorJoint {
         }
 
         if body_a.is_dynamic() {
-            body_a.add_angular_impulse(-impulse);
+            body_a.add_angular_impulse_no_wake(-impulse);
         }
         if body_b.is_dynamic() {
-            body_b.add_angular_impulse(impulse);
+            body_b.add_angular_impulse_no_wake(impulse);
         }
     }
 }

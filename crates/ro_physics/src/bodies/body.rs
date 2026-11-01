@@ -214,6 +214,66 @@ impl Body {
         self.wake_up();
     }
 
+    // ---- Internal setters used by the simulation ----
+    //
+    // The public setters above wake the body up, which is what a user changing
+    // the state of a body expects. The simulation itself touches velocities
+    // and positions on every step (gravity, solver impulses, integration), and
+    // those changes must not reset the sleep timer, or no body could ever
+    // fall asleep.
+
+    /// Set the linear velocity without waking the body
+    #[inline]
+    pub(crate) fn set_linear_velocity_no_wake(&mut self, velocity: Vec2) {
+        self.linear_velocity = velocity;
+    }
+
+    /// Set the angular velocity without waking the body
+    #[inline]
+    pub(crate) fn set_angular_velocity_no_wake(&mut self, velocity: f32) {
+        self.angular_velocity = velocity;
+    }
+
+    /// Set the position without waking the body
+    #[inline]
+    pub(crate) fn set_position_no_wake(&mut self, position: Vec2) {
+        self.transform.position = position;
+    }
+
+    /// Set the rotation without waking the body
+    #[inline]
+    pub(crate) fn set_rotation_no_wake(&mut self, rotation: Rot2) {
+        self.transform.rotation = rotation;
+    }
+
+    /// Add an impulse at a point without waking the body
+    #[inline]
+    pub(crate) fn add_impulse_at_point_no_wake(&mut self, impulse: Vec2, point: Vec2) {
+        if !self.is_dynamic() {
+            return;
+        }
+
+        self.linear_velocity += impulse * self.inv_mass;
+        let r = point - self.transform.position;
+        self.angular_velocity += self.inv_inertia * r.cross(impulse);
+    }
+
+    /// Add a linear impulse without waking the body
+    #[inline]
+    pub(crate) fn add_impulse_no_wake(&mut self, impulse: Vec2) {
+        if self.is_dynamic() {
+            self.linear_velocity += impulse * self.inv_mass;
+        }
+    }
+
+    /// Add an angular impulse without waking the body
+    #[inline]
+    pub(crate) fn add_angular_impulse_no_wake(&mut self, impulse: f32) {
+        if self.is_dynamic() {
+            self.angular_velocity += impulse * self.inv_inertia;
+        }
+    }
+
     /// Get the mass
     #[inline]
     #[must_use]
