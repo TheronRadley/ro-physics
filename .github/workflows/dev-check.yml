@@ -41,6 +41,13 @@ jobs:
       - name: Format
         run: |
           mkdir -p /tmp/logs
+          {
+            echo "### rustfmt version"; rustfmt --version
+            echo "### cargo fmt --all -- --check"
+            cargo fmt --all -- --check 2>&1
+            echo "### exit: $?"
+          } > /tmp/logs/fmt-check.txt 2>&1 || true
+          head -40 /tmp/logs/fmt-check.txt
           cargo fmt --all
           git diff --binary > /tmp/logs/fmt.patch
           if [ -s /tmp/logs/fmt.patch ]; then
