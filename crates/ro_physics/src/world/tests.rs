@@ -3,8 +3,8 @@
 use super::*;
 use crate::ccd::CcdConfig;
 use crate::math::{Rot2, Transform, Vec2};
-use crate::solver::SolverConfig;
 use crate::sleeping::SleepingConfig;
+use crate::solver::SolverConfig;
 
 #[test]
 fn test_world_creation() {
@@ -313,9 +313,7 @@ fn test_invalid_input_is_refused_instead_of_panicking() {
     assert!(world.add_circle(body, -1.0, 1.0).is_null());
     assert!(world.add_circle(body, f32::NAN, 1.0).is_null());
     assert!(world.add_circle(body, f32::INFINITY, 1.0).is_null());
-    assert!(world
-        .add_box(body, Vec2::new(f32::NAN, 1.0), 1.0)
-        .is_null());
+    assert!(world.add_box(body, Vec2::new(f32::NAN, 1.0), 1.0).is_null());
     assert!(world.add_polygon(body, Vec::new(), 1.0).is_null());
     assert!(world
         .add_polygon(body, vec![Vec2::zero(), Vec2::new(1.0, 0.0)], 1.0)

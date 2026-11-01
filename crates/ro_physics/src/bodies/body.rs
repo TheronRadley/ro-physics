@@ -983,10 +983,19 @@ mod tests {
         assert!(body.is_valid());
         assert!(body.validate());
 
+        // The setters refuse non-finite input, so a bad call leaves the body
+        // valid and unchanged
         let mut invalid_body = Body::new_dynamic(handle);
         invalid_body.set_position(Vec2::new(f32::NAN, 0.0));
-        assert!(!invalid_body.is_valid());
-        assert!(!invalid_body.validate());
+        assert_eq!(invalid_body.position(), Vec2::zero());
+        assert!(invalid_body.is_valid());
+        assert!(invalid_body.validate());
+
+        // `is_valid` still reports state that was corrupted some other way
+        let mut corrupted = Body::new_dynamic(handle);
+        corrupted.transform.position = Vec2::new(f32::NAN, 0.0);
+        assert!(!corrupted.is_valid());
+        assert!(!corrupted.validate());
     }
 
     #[test]

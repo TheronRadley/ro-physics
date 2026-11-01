@@ -408,7 +408,7 @@ impl AabbTree {
         // Only leaves can be detached. This is a runtime check rather than a
         // `debug_assert!` because in a release build removing an internal node
         // would silently corrupt the tree and every later query with it.
-        if !self.nodes.get(leaf).map_or(false, TreeNode::is_leaf) {
+        if !self.nodes.get(leaf).is_some_and(TreeNode::is_leaf) {
             return;
         }
 

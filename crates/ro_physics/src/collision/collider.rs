@@ -533,11 +533,20 @@ mod tests {
         assert!(collider.is_valid());
         assert!(collider.validate());
 
+        // The setters refuse non-finite input, so a bad call leaves the
+        // collider valid and unchanged
         let mut invalid_collider =
             Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
         invalid_collider.set_friction(f32::NAN);
-        assert!(!invalid_collider.is_valid());
-        assert!(!invalid_collider.validate());
+        assert!(invalid_collider.friction.is_finite());
+        assert!(invalid_collider.is_valid());
+        assert!(invalid_collider.validate());
+
+        // `is_valid` still reports state that was corrupted some other way
+        let mut corrupted = Collider::new(handle, body_handle, Shape::Circle(Circle::new(5.0)));
+        corrupted.friction = f32::NAN;
+        assert!(!corrupted.is_valid());
+        assert!(!corrupted.validate());
     }
 
     #[test]
