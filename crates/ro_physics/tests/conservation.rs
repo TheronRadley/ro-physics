@@ -288,7 +288,7 @@ fn test_energy_dissipation_inelastic() {
     }
 
     let initial_energy = total_kinetic_energy(&world);
-    
+
     // Step the simulation long enough for the circles to meet: they start
     // 2 m apart (centres at -2 and 2, radius 1) and close at 5 m/s, so the
     // impact happens after roughly 0.4 s.
@@ -335,7 +335,7 @@ fn test_mechanical_energy_conservation_with_gravity() {
     }
 
     let final_energy = total_mechanical_energy(&world, gravity);
-    
+
     // Mechanical energy should be approximately conserved: potential and
     // kinetic energy trade off, and what is left is the integrator's error.
     // The step is a first-order symplectic one, so its energy error is
@@ -343,9 +343,13 @@ fn test_mechanical_energy_conservation_with_gravity() {
     // far above a fixed 0.1 J, so compare it against the total energy.
     let energy_diff = (initial_energy - final_energy).abs();
     let relative_diff = energy_diff / initial_energy.max(f32::EPSILON);
-    assert!(relative_diff < 0.01,
+    assert!(
+        relative_diff < 0.01,
         "Mechanical energy not conserved! Difference: {} ({:.3}% of {})",
-        energy_diff, relative_diff * 100.0, initial_energy);
+        energy_diff,
+        relative_diff * 100.0,
+        initial_energy
+    );
 }
 
 // ============================================================================

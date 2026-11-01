@@ -331,11 +331,7 @@ impl World {
     #[inline]
     #[must_use]
     pub fn body_handles(&self) -> Vec<BodyHandle> {
-        self.bodies
-            .iter()
-            .flatten()
-            .map(Body::handle)
-            .collect()
+        self.bodies.iter().flatten().map(Body::handle).collect()
     }
 
     // ------------------------------------------------------------------

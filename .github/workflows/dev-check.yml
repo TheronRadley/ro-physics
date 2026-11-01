@@ -90,7 +90,7 @@ jobs:
           git checkout --orphan logs-tmp
           git rm -rf --quiet . || true
           mkdir -p ci-logs
-          cp /tmp/logs/*.txt ci-logs/ || true
+          cp /tmp/logs/* ci-logs/ || true
           git add ci-logs
           git commit -m "ci logs for ${GITHUB_SHA}" --quiet
           git push --force origin "HEAD:${GITHUB_REF_NAME}-logs"
