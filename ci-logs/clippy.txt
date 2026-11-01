@@ -1,0 +1,2 @@
+[1m[92m    Checking[0m ro_physics v0.1.0 (/home/runner/work/ro-physics/ro-physics/crates/ro_physics)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 2.78s

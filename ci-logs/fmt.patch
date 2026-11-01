@@ -1,0 +1,15 @@
+diff --git a/crates/ro_physics/src/constraints/motor_joint.rs b/crates/ro_physics/src/constraints/motor_joint.rs
+index baa18d1..7ce5ac8 100644
+--- a/crates/ro_physics/src/constraints/motor_joint.rs
++++ b/crates/ro_physics/src/constraints/motor_joint.rs
+@@ -536,8 +536,8 @@ impl MotorJoint {
+         // Baumgarte factor
+         const BAUMGARTE_FACTOR: f32 = 0.2;
+ 
+-        let velocity = (-BAUMGARTE_FACTOR * error / dt)
+-            .clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
++        let velocity =
++            (-BAUMGARTE_FACTOR * error / dt).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
+ 
+         if max_force > EPSILON && effective_mass > EPSILON {
+             let max_velocity = max_force * dt / effective_mass;

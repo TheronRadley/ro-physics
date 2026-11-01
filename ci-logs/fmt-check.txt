@@ -1,0 +1,15 @@
+### rustfmt version
+rustfmt 1.10.0-stable (58cf8f9c35 2026-10-13)
+### cargo fmt --all -- --check
+Diff in /home/runner/work/ro-physics/ro-physics/crates/ro_physics/src/constraints/motor_joint.rs:536:
+         // Baumgarte factor
+         const BAUMGARTE_FACTOR: f32 = 0.2;
+ 
+-        let velocity = (-BAUMGARTE_FACTOR * error / dt)
+-            .clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
++        let velocity =
++            (-BAUMGARTE_FACTOR * error / dt).clamp(-MAX_CORRECTION_SPEED, MAX_CORRECTION_SPEED);
+ 
+         if max_force > EPSILON && effective_mass > EPSILON {
+             let max_velocity = max_force * dt / effective_mass;
+### exit: 1
